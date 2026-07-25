@@ -1,0 +1,3 @@
+-keepclassmembers class com.tempmail.app.network.** { *; }
+-dontwarn okhttp3.**
+-dontwarn okio.**
