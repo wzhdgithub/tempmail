@@ -3,6 +3,8 @@ package com.tempmail.app
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
@@ -32,6 +34,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.tempmail.app.ui.theme.TempMailTheme
@@ -524,20 +527,52 @@ private fun SettingsTab(
                             }
                         }
 
-                        SettingsPage.Author -> {
-                            IconButton(onClick = { page = SettingsPage.Main }) {
-                                Icon(Icons.AutoMirrored.Filled.ArrowBack, s.back)
-                            }
-                            Spacer(Modifier.height(8.dp))
-                            Text(s.author, style = MaterialTheme.typography.headlineSmall)
-                            Spacer(Modifier.height(20.dp))
-                            Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)) {
-                                Column(Modifier.padding(20.dp)) {
-                                    Text(s.authorHint, style = MaterialTheme.typography.bodyMedium,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                }
-                            }
+                SettingsPage.Author -> {
+                    val ctx = LocalContext.current
+                    IconButton(onClick = { page = SettingsPage.Main }) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, s.back)
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    Text(s.author, style = MaterialTheme.typography.headlineSmall)
+                    Spacer(Modifier.height(20.dp))
+                    Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)) {
+                        Column(Modifier.padding(20.dp)) {
+                            Text("GitHub", style = MaterialTheme.typography.labelLarge)
+                            Spacer(Modifier.height(4.dp))
+                            Text("github.com/wzhdgithub",
+                                style = MaterialTheme.typography.bodyMedium.copy(
+                                    textDecoration = TextDecoration.Underline,
+                                    color = MaterialTheme.colorScheme.primary
+                                ),
+                                modifier = Modifier.clickable {
+                                    ctx.startActivity(Intent(Intent.ACTION_VIEW,
+                                        Uri.parse("https://github.com/wzhdgithub")))
+                                })
+                            Spacer(Modifier.height(4.dp))
+                            Text("github.com/wzhdgithub/tempmail",
+                                style = MaterialTheme.typography.bodyMedium.copy(
+                                    textDecoration = TextDecoration.Underline,
+                                    color = MaterialTheme.colorScheme.primary
+                                ),
+                                modifier = Modifier.clickable {
+                                    ctx.startActivity(Intent(Intent.ACTION_VIEW,
+                                        Uri.parse("https://github.com/wzhdgithub/tempmail")))
+                                })
+                            Spacer(Modifier.height(12.dp))
+                            Divider()
+                            Spacer(Modifier.height(12.dp))
+                            Text("Email", style = MaterialTheme.typography.labelLarge)
+                            Spacer(Modifier.height(4.dp))
+                            Text("(待完善)", style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Spacer(Modifier.height(12.dp))
+                            Text("微信", style = MaterialTheme.typography.labelLarge)
+                            Spacer(Modifier.height(4.dp))
+                            Text("(待完善)", style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
+                    }
+                }
                     }
                 }
             }
