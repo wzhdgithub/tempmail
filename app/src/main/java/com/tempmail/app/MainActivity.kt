@@ -20,10 +20,12 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.clickable
@@ -48,6 +50,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -55,6 +58,7 @@ import com.tempmail.app.ui.theme.TempMailTheme
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlin.random.Random
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.json.JSONArray
@@ -492,6 +496,7 @@ class MainActivity : ComponentActivity() {
             var updateBody by remember { mutableStateOf("") }
             var showDownloadProgress by remember { mutableStateOf(false) }
             var downloadProgress by remember { mutableStateOf(0) }
+            var poem by remember { mutableStateOf<PoemLine?>(null) }
 
             val client = remember {
                 OkHttpClient.Builder()
@@ -618,6 +623,10 @@ class MainActivity : ComponentActivity() {
                 if (state.autoCheckUpdate) checkUpdate()
             }
 
+            LaunchedEffect(Unit) {
+                poem = withContext(Dispatchers.IO) { fetchRandomPoemLine(client) }
+            }
+
             TempMailTheme(darkTheme = state.isDarkMode) {
                 Scaffold(
                     snackbarHost = { SnackbarHost(snackbar) },
@@ -712,7 +721,7 @@ class MainActivity : ComponentActivity() {
                             label = "tabContent"
                         ) { tab ->
                             when (tab) {
-                                Tab.Inbox -> InboxTab(p, state, snackbar, scope, context, s, client, ::doRefresh) { newState ->
+                                Tab.Inbox -> InboxTab(p, state, snackbar, scope, context, s, client, poem, ::doRefresh) { newState ->
                                     state = newState
                                 }
                                 Tab.History -> HistoryTab(p, state, s) { email ->
@@ -794,19 +803,52 @@ private fun InboxTab(
     context: Context,
     s: Strings,
     client: OkHttpClient,
+    poem: PoemLine?,
     doRefresh: (String, (Int, String) -> Unit) -> Unit,
     onState: (AppState) -> Unit
 ) {
     var showBodyDialog by remember { mutableStateOf(false) }
     var dialogBody by remember { mutableStateOf("") }
     var dialogHtml by remember { mutableStateOf("") }
+    var showPoem by remember { mutableStateOf(false) }
+
+    LaunchedEffect(poem != null) {
+        if (poem != null) showPoem = true
+    }
 
     Column(
         modifier = Modifier.fillMaxSize().padding(p).padding(horizontal = 24.dp)
             .statusBarsPadding().verticalScroll(rememberScrollState()),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Spacer(Modifier.height(24.dp))
+        if (!showPoem) Spacer(Modifier.height(24.dp))
+        AnimatedVisibility(
+            visible = showPoem,
+            enter = fadeIn(tween(600)) + slideInVertically(
+                initialOffsetY = { -it / 4 },
+                animationSpec = tween(600)
+            )
+        ) {
+            poem?.let { pm ->
+                Column(
+                    Modifier.fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Spacer(Modifier.height(12.dp))
+                    Text(pm.line,
+                        style = MaterialTheme.typography.titleMedium.copy(fontFamily = FontFamily.Serif),
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.fillMaxWidth())
+                    Spacer(Modifier.height(4.dp))
+                    Text("——《${pm.title}》${if (pm.author.isNotBlank()) " ${pm.author}" else ""}",
+                        style = MaterialTheme.typography.labelSmall,
+                        textAlign = TextAlign.Center,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.fillMaxWidth())
+                    Spacer(Modifier.height(12.dp))
+                }
+            }
+        }
         Icon(Icons.Default.Email, contentDescription = s.title, Modifier.size(64.dp),
             tint = MaterialTheme.colorScheme.primary)
         Spacer(Modifier.height(12.dp))
@@ -1547,6 +1589,46 @@ private fun openMailLink(view: WebView?, uri: Uri?) {
         ctx.startActivity(Intent(Intent.ACTION_VIEW, u))
     } catch (e: Exception) {
         Log.d("MAIL_LINK", "open failed: $e")
+    }
+}
+
+private data class PoemLine(val line: String, val title: String, val author: String)
+
+private val poemApiUrls = listOf(
+    "https://poetry.palemoky.com/api/v1/poems/random",
+    "https://poetry.palemoky.com/api/poems/random"
+)
+
+private fun fetchRandomPoemLine(client: OkHttpClient): PoemLine? {
+    for (url in poemApiUrls) {
+        val poem = try {
+            val r = Request.Builder().url(url).get().build()
+            val resp = client.newCall(r).execute()
+            val body = resp.body?.string()
+            resp.close()
+            if (body != null) parsePoemResponse(body) else null
+        } catch (e: Exception) {
+            Log.d("POEM_DEBUG", "fetch $url failed: ${e.message}")
+            null
+        }
+        if (poem != null) return poem
+    }
+    return null
+}
+
+private fun parsePoemResponse(body: String): PoemLine? {
+    return try {
+        val data = JSONObject(body).optJSONObject("data") ?: return null
+        val title = data.optString("title", "").trim()
+        val author = data.optJSONObject("author")?.optString("name", "")?.trim() ?: ""
+        val content = data.optJSONArray("content") ?: return null
+        if (content.length() == 0) return null
+        val line = content.optString(Random.nextInt(content.length())).trim()
+        if (line.isBlank()) return null
+        PoemLine(line, title, author)
+    } catch (e: Exception) {
+        Log.d("POEM_DEBUG", "parse failed: ${e.message}")
+        null
     }
 }
 
