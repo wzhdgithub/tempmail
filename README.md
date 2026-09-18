@@ -28,9 +28,9 @@
 - 应用功能域清晰且有限（邮箱生成 → 邮件接收 → 历史管理 → 设置），无需复杂的多模块拆分
 - 避免 ViewModel + StateFlow 等重型架构带来的模板代码
 - `AppState` 单一数据源通过 `mutableStateOf` 驱动 Compose 重组，状态管理直观
-- 网络请求使用 `Thread` 而非协程/Flow，减少依赖和编译体积
+- 网络请求使用协程（`Dispatchers.IO`），不引入 Flow/架构组件，保持轻量
 
-所有 UI、网络、解析、更新逻辑均集中于 `MainActivity.kt`（约 1586 行），配合 `ui/theme/` 下的主题配置。
+所有 UI、网络、解析、更新逻辑均集中于 `MainActivity.kt`（约 1930 行），配合 `ui/theme/` 下的主题配置。
 
 ### 工作流程
 
@@ -72,7 +72,7 @@
 | **无 Hilt / Koin** | 仅一个 OkHttpClient 实例，手动 `remember` 一把即可 |
 | **无 Navigation Compose** | 三个 tab 用 AnimatedContent 切换，设置子页用 enmu + AnimatedContent，比 Navigation 更可控 |
 | **无 Room** | 历史记录仅存内存，非持久化（用户预期就是一次性使用） |
-| **Thread 而非协程** | 减少 kotlinx.coroutines 依赖（仅用于 snackbar），编译更快、APK 更小 |
+| **协程（无 Flow）** | 仅用 `Dispatchers.IO` + `launch`，不引入 Flow/架构组件，保持轻量 |
 
 ### Gradle 构建要点
 
@@ -92,6 +92,11 @@ release { isMinifyEnabled = true; isShrinkResources = true }
 ---
 
 ## 功能说明
+
+### 首次启动
+
+- **免责声明**：首次启动展示服务免责声明，同意后可进入（含一个性别选择小彩蛋）
+- **诗句横幅**：收件箱顶部随机展示一句古诗词（poetry.palemoky.com，仅启动时请求一次）
 
 ### 收件箱（Inbox）
 
@@ -123,9 +128,10 @@ release { isMinifyEnabled = true; isShrinkResources = true }
 1. 启动时（或手动点击"检查更新"） → GET `https://api.github.com/repos/wzhdgithub/tempmail/releases/latest`
 2. 比较 `tag_name` 与当前 `BuildConfig.VERSION_NAME`
 3. 有新版本 → 弹出 AlertDialog 显示发版说明
-4. 点击"在线更新" → `OkHttp` 下载 APK 到 `getExternalFilesDir`
+4. 点击"在线更新" → `OkHttp` 下载 APK 到 `getExternalFilesDir/updates`
 5. 下载过程中显示 `LinearProgressIndicator` + 百分比
-6. 下载完成 → `FileProvider` + `ACTION_VIEW` 拉起安装界面
+6. 下载完成 → 校验 APK 的 SHA-256（取自 Release asset 的 `digest` 字段，或发版说明中的 64 位十六进制哈希），校验失败则删除安装包并提示失败
+7. 校验通过 → `FileProvider` + `ACTION_VIEW` 拉起安装界面
 
 ```kotlin
 fun downloadInstall(url: String) {
@@ -206,6 +212,8 @@ PearAPI 返回的 `receivedata` 格式：
 | v1.5 | 邮件解析兼容多格式、正文 HTML/纯文本降级展示 |
 | v1.6 | WebView 渲染邮件正文、验证链接/按钮点击跳转浏览器、验证码一键复制 |
 | v1.7 | 历史邮箱一键复用、设置持久化、版本号统一读取 BuildConfig |
+| v1.8 | 配置更改状态持久化（rememberSaveable）、时间戳排序、Dialog 文案全面国际化、SHA-256 更新校验、签名凭据外置、Release 日志剥离 |
+| v1.9 | WebView 泄漏修复、状态栏图标跟随应用主题、更新限流误报修复、验证码正则修正、远程图片默认关闭（防追踪）、下载可取消、自适应图标 |
 
 ---
 
@@ -213,9 +221,9 @@ PearAPI 返回的 `receivedata` 格式：
 
 ### 环境要求
 
-- **JDK 24**（`$env:JAVA_HOME = "C:\Program Files\Java\jdk-24"`）
+- **JDK 24**（`$env:JAVA_HOME = "C:\Program Files\Java\jdk-24"`）：用于运行 Gradle/Kotlin 编译守护进程（JDK 25 与 Kotlin 1.9.22 的版本号解析器不兼容）；编译产物目标为 Java 17
 - Android SDK 34
-- Gradle 8.13 (wrapper 自动下载)
+- Gradle 8.13 (wrapper 自动下载，Windows 用 `gradlew.bat`，Linux/macOS 用 `./gradlew`)
 
 ### 构建 Debug APK
 
@@ -235,8 +243,9 @@ APK 输出位置：`app/build/outputs/apk/release/app-release.apk`
 
 ### 注意
 
-- 签名文件 `app/keystore.jks`，密码均为 `123456`
-- Release 构建启用 ProGuard（`proguard-rules.pro`）
+- 签名凭据存放于根目录 `keystore.properties`（已加入 `.gitignore`，不纳入版本控制），字段为 `storeFile` / `storePassword` / `keyAlias` / `keyPassword`；也可通过环境变量 `KEYSTORE_PASSWORD` / `KEY_PASSWORD` 提供。缺少凭据时 debug 回退到默认签名、release 不签名
+- 发布新版时，APK 的 SHA-256 会自动随 GitHub Release asset 的 `digest` 字段下发；如使用其他发布渠道，请在发版说明中附上 64 位十六进制哈希
+- Release 构建启用 ProGuard（`proguard-rules.pro`），并通过 `-assumenosideeffects` 移除全部 `android.util.Log` 调用
 - `buildConfig = true` 必须开启，否则 `BuildConfig.VERSION_NAME` 不可用
 
 ---

@@ -7,3 +7,21 @@ val SurfaceLight = Color(0xFFF8F9FA)
 val SurfaceDark = Color(0xFF121212)
 val CardLight = Color(0xFFFFFFFF)
 val CardDark = Color(0xFF1E1E1E)
+
+// HyperOS 风格配色
+val HyperBlueLight = Color(0xFF0072E3)
+val HyperBlueDark = Color(0xFF4DA3FF)
+val HyperSurfaceLight = Color(0xFFF5F5F5)
+val HyperSurfaceDark = Color(0xFF0A0A0A)
+val HyperCardLight = Color(0xFFFFFFFF)
+val HyperCardDark = Color(0xFF1A1A1A)
+
+// 主题风格。持久化使用稳定字符串 key；fromKey 对未知值一律回退 Material3，禁止直接 valueOf
+enum class ThemeStyle(val key: String) {
+    Material3("material3"),
+    HyperOS("hyperos");
+
+    companion object {
+        fun fromKey(key: String?): ThemeStyle = entries.find { it.key == key } ?: Material3
+    }
+}

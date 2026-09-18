@@ -8,15 +8,14 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
 import android.os.Message
-import android.text.method.LinkMovementMethod
-import android.text.util.Linkify
 import android.webkit.WebChromeClient
 import android.webkit.WebView
 import android.webkit.WebViewClient
-import android.widget.TextView
 import androidx.activity.ComponentActivity
 import androidx.core.content.FileProvider
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.AnimatedContent
@@ -31,7 +30,6 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -42,12 +40,14 @@ import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.Saver
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextAlign
@@ -55,10 +55,14 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.tempmail.app.ui.theme.TempMailTheme
+import com.tempmail.app.ui.theme.ThemeStyle
+import com.tempmail.app.ui.theme.themedCornerShape
+import com.tempmail.app.ui.theme.themedSwitchColors
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlin.random.Random
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.json.JSONArray
@@ -99,7 +103,13 @@ private data class Strings(
     val version: String, val langSelect: String, val darkModeSetting: String,
     val updateNow: String, val updateLater: String, val autoCheckUpdate: String,
     val genderMale: String, val genderFemale: String, val genderOther: String,
-    val genderOccupied: String, val genderSelect: String
+    val genderOccupied: String, val genderSelect: String,
+    val close: String, val copyCode: String, val codeCopied: String,
+    val networkError: String, val queryFailed: String, val fetchFailed: String,
+    val unknownSender: String,
+    val cancel: String, val rawData: String,
+    val authorHomepage: String, val projectRepo: String,
+    val themeStyle: String, val themeDefault: String, val themeHyperOS: String
 )
 
 private fun strings(lang: String): Strings = when (lang) {
@@ -121,7 +131,13 @@ private fun strings(lang: String): Strings = when (lang) {
         version = "Version", langSelect = "Select Language", darkModeSetting = "Dark Mode",
         updateNow = "Update Now", updateLater = "Later", autoCheckUpdate = "Auto Check Update",
         genderMale = "Male", genderFemale = "Female", genderOther = "Other",
-        genderOccupied = "This gender is already taken", genderSelect = "Select Gender"
+        genderOccupied = "This gender is already taken", genderSelect = "Select Gender",
+        close = "Close", copyCode = "Copy Code", codeCopied = "Code copied",
+        networkError = "Network error", queryFailed = "Query failed", fetchFailed = "Fetch failed",
+        unknownSender = "Unknown sender",
+        cancel = "Cancel", rawData = "Raw data:",
+        authorHomepage = "Author Homepage", projectRepo = "Project Repository",
+        themeStyle = "Theme", themeDefault = "Default / Material3", themeHyperOS = "HyperOS"
     )
     "ja" -> Strings(
         title = "一時メール",
@@ -141,7 +157,13 @@ private fun strings(lang: String): Strings = when (lang) {
         version = "バージョン", langSelect = "言語選択", darkModeSetting = "ダークモード設定",
         updateNow = "今すぐ更新", updateLater = "後で", autoCheckUpdate = "自動更新チェック",
         genderMale = "男性", genderFemale = "女性", genderOther = "その他",
-        genderOccupied = "この性別は既に使用されています", genderSelect = "性別を選択"
+        genderOccupied = "この性別は既に使用されています", genderSelect = "性別を選択",
+        close = "閉じる", copyCode = "コードをコピー", codeCopied = "コードをコピーしました",
+        networkError = "ネットワークエラー", queryFailed = "クエリに失敗しました", fetchFailed = "取得に失敗しました",
+        unknownSender = "不明な送信者",
+        cancel = "キャンセル", rawData = "生データ:",
+        authorHomepage = "作者ホームページ", projectRepo = "プロジェクトリポジトリ",
+        themeStyle = "テーマ", themeDefault = "デフォルト / Material3", themeHyperOS = "HyperOS"
     )
     "ko" -> Strings(
         title = "임시 메일",
@@ -161,7 +183,13 @@ private fun strings(lang: String): Strings = when (lang) {
         version = "버전", langSelect = "언어 선택", darkModeSetting = "다크 모드 설정",
         updateNow = "지금 업데이트", updateLater = "나중에", autoCheckUpdate = "자동 업데이트 확인",
         genderMale = "남성", genderFemale = "여성", genderOther = "기타",
-        genderOccupied = "이 성별은 이미 사용 중입니다", genderSelect = "성별 선택"
+        genderOccupied = "이 성별은 이미 사용 중입니다", genderSelect = "성별 선택",
+        close = "닫기", copyCode = "인증 코드 복사", codeCopied = "코드가 복사되었습니다",
+        networkError = "네트워크 오류", queryFailed = "조회 실패", fetchFailed = "가져오기 실패",
+        unknownSender = "알 수 없는 발신자",
+        cancel = "취소", rawData = "원본 데이터:",
+        authorHomepage = "작성자 홈페이지", projectRepo = "프로젝트 저장소",
+        themeStyle = "테마", themeDefault = "기본 / Material3", themeHyperOS = "HyperOS"
     )
     "fr" -> Strings(
         title = "Temp Mail",
@@ -181,7 +209,13 @@ private fun strings(lang: String): Strings = when (lang) {
         version = "Version", langSelect = "Choisir la langue", darkModeSetting = "Réglage mode sombre",
         updateNow = "Mettre à jour", updateLater = "Plus tard", autoCheckUpdate = "Vérification automatique",
         genderMale = "Homme", genderFemale = "Femme", genderOther = "Autre",
-        genderOccupied = "Ce genre est déjà pris", genderSelect = "Sélectionnez le genre"
+        genderOccupied = "Ce genre est déjà pris", genderSelect = "Sélectionnez le genre",
+        close = "Fermer", copyCode = "Copier le code", codeCopied = "Code copié",
+        networkError = "Erreur réseau", queryFailed = "Échec de la requête", fetchFailed = "Échec de la récupération",
+        unknownSender = "Expéditeur inconnu",
+        cancel = "Annuler", rawData = "Données brutes :",
+        authorHomepage = "Page de l'auteur", projectRepo = "Dépôt du projet",
+        themeStyle = "Thème", themeDefault = "Par défaut / Material3", themeHyperOS = "HyperOS"
     )
     "de" -> Strings(
         title = "Temp Mail",
@@ -201,7 +235,13 @@ private fun strings(lang: String): Strings = when (lang) {
         version = "Version", langSelect = "Sprache auswählen", darkModeSetting = "Dunkelmodus-Einstellung",
         updateNow = "Jetzt aktualisieren", updateLater = "Später", autoCheckUpdate = "Automatische Update-Prüfung",
         genderMale = "Männlich", genderFemale = "Weiblich", genderOther = "Andere",
-        genderOccupied = "Dieses Geschlecht ist bereits vergeben", genderSelect = "Geschlecht auswählen"
+        genderOccupied = "Dieses Geschlecht ist bereits vergeben", genderSelect = "Geschlecht auswählen",
+        close = "Schließen", copyCode = "Code kopieren", codeCopied = "Code kopiert",
+        networkError = "Netzwerkfehler", queryFailed = "Abfrage fehlgeschlagen", fetchFailed = "Abruf fehlgeschlagen",
+        unknownSender = "Unbekannter Absender",
+        cancel = "Abbrechen", rawData = "Rohdaten:",
+        authorHomepage = "Autorenseite", projectRepo = "Projekt-Repository",
+        themeStyle = "Design", themeDefault = "Standard / Material3", themeHyperOS = "HyperOS"
     )
     "es" -> Strings(
         title = "Correo Temporal",
@@ -221,7 +261,13 @@ private fun strings(lang: String): Strings = when (lang) {
         version = "Versión", langSelect = "Seleccionar idioma", darkModeSetting = "Configurar modo oscuro",
         updateNow = "Actualizar ahora", updateLater = "Después", autoCheckUpdate = "Comprobación automática",
         genderMale = "Masculino", genderFemale = "Femenino", genderOther = "Otro",
-        genderOccupied = "Este género ya está ocupado", genderSelect = "Seleccionar género"
+        genderOccupied = "Este género ya está ocupado", genderSelect = "Seleccionar género",
+        close = "Cerrar", copyCode = "Copiar código", codeCopied = "Código copiado",
+        networkError = "Error de red", queryFailed = "Consulta fallida", fetchFailed = "Error al obtener",
+        unknownSender = "Remitente desconocido",
+        cancel = "Cancelar", rawData = "Datos sin procesar:",
+        authorHomepage = "Página del autor", projectRepo = "Repositorio del proyecto",
+        themeStyle = "Tema", themeDefault = "Predeterminado / Material3", themeHyperOS = "HyperOS"
     )
     "pt" -> Strings(
         title = "Email Temporário",
@@ -241,7 +287,13 @@ private fun strings(lang: String): Strings = when (lang) {
         version = "Versão", langSelect = "Selecionar idioma", darkModeSetting = "Configuração modo escuro",
         updateNow = "Atualizar agora", updateLater = "Depois", autoCheckUpdate = "Verificação automática",
         genderMale = "Masculino", genderFemale = "Feminino", genderOther = "Outro",
-        genderOccupied = "Este gênero já está ocupado", genderSelect = "Selecionar gênero"
+        genderOccupied = "Este gênero já está ocupado", genderSelect = "Selecionar gênero",
+        close = "Fechar", copyCode = "Copiar código", codeCopied = "Código copiado",
+        networkError = "Erro de rede", queryFailed = "Falha na consulta", fetchFailed = "Falha ao obter",
+        unknownSender = "Remetente desconhecido",
+        cancel = "Cancelar", rawData = "Dados brutos:",
+        authorHomepage = "Página do autor", projectRepo = "Repositório do projeto",
+        themeStyle = "Tema", themeDefault = "Padrão / Material3", themeHyperOS = "HyperOS"
     )
     "ru" -> Strings(
         title = "Временная почта",
@@ -261,7 +313,13 @@ private fun strings(lang: String): Strings = when (lang) {
         version = "Версия", langSelect = "Выбор языка", darkModeSetting = "Настройка тёмной темы",
         updateNow = "Обновить сейчас", updateLater = "Позже", autoCheckUpdate = "Автопроверка обновлений",
         genderMale = "Мужской", genderFemale = "Женский", genderOther = "Другое",
-        genderOccupied = "Этот пол уже занят", genderSelect = "Выберите пол"
+        genderOccupied = "Этот пол уже занят", genderSelect = "Выберите пол",
+        close = "Закрыть", copyCode = "Копировать код", codeCopied = "Код скопирован",
+        networkError = "Ошибка сети", queryFailed = "Запрос не удался", fetchFailed = "Не удалось получить",
+        unknownSender = "Неизвестный отправитель",
+        cancel = "Отмена", rawData = "Исходные данные:",
+        authorHomepage = "Страница автора", projectRepo = "Репозиторий проекта",
+        themeStyle = "Тема", themeDefault = "По умолчанию / Material3", themeHyperOS = "HyperOS"
     )
     "it" -> Strings(
         title = "Email Temporanea",
@@ -281,7 +339,13 @@ private fun strings(lang: String): Strings = when (lang) {
         version = "Versione", langSelect = "Seleziona lingua", darkModeSetting = "Impostazione modalità scura",
         updateNow = "Aggiorna ora", updateLater = "Dopo", autoCheckUpdate = "Controllo automatico",
         genderMale = "Maschio", genderFemale = "Femmina", genderOther = "Altro",
-        genderOccupied = "Questo genere è già occupato", genderSelect = "Seleziona genere"
+        genderOccupied = "Questo genere è già occupato", genderSelect = "Seleziona genere",
+        close = "Chiudi", copyCode = "Copia codice", codeCopied = "Codice copiato",
+        networkError = "Errore di rete", queryFailed = "Query non riuscita", fetchFailed = "Recupero non riuscito",
+        unknownSender = "Mittente sconosciuto",
+        cancel = "Annulla", rawData = "Dati grezzi:",
+        authorHomepage = "Pagina dell'autore", projectRepo = "Repository del progetto",
+        themeStyle = "Tema", themeDefault = "Predefinito / Material3", themeHyperOS = "HyperOS"
     )
     "ar" -> Strings(
         title = "بريد مؤقت",
@@ -301,7 +365,13 @@ private fun strings(lang: String): Strings = when (lang) {
         version = "الإصدار", langSelect = "اختر اللغة", darkModeSetting = "إعدادات الوضع الداكن",
         updateNow = "تحديث الآن", updateLater = "لاحقاً", autoCheckUpdate = "التحقق التلقائي من التحديث",
         genderMale = "ذكر", genderFemale = "أنثى", genderOther = "آخر",
-        genderOccupied = "هذا الجنس محجوز بالفعل", genderSelect = "اختر الجنس"
+        genderOccupied = "هذا الجنس محجوز بالفعل", genderSelect = "اختر الجنس",
+        close = "إغلاق", copyCode = "نسخ الرمز", codeCopied = "تم نسخ الرمز",
+        networkError = "خطأ في الشبكة", queryFailed = "فشل الاستعلام", fetchFailed = "فشل الجلب",
+        unknownSender = "مرسل غير معروف",
+        cancel = "إلغاء", rawData = "البيانات الخام:",
+        authorHomepage = "صفحة المؤلف", projectRepo = "مستودع المشروع",
+        themeStyle = "السمة", themeDefault = "افتراضي / Material3", themeHyperOS = "HyperOS"
     )
     "hi" -> Strings(
         title = "अस्थायी मेल",
@@ -321,7 +391,13 @@ private fun strings(lang: String): Strings = when (lang) {
         version = "संस्करण", langSelect = "भाषा चुनें", darkModeSetting = "डार्क मोड सेटिंग",
         updateNow = "अभी अपडेट करें", updateLater = "बाद में", autoCheckUpdate = "स्वचालित अपडेट जाँच",
         genderMale = "पुरुष", genderFemale = "महिला", genderOther = "अन्य",
-        genderOccupied = "यह लिंग पहले से लिया हुआ है", genderSelect = "लिंग चुनें"
+        genderOccupied = "यह लिंग पहले से लिया हुआ है", genderSelect = "लिंग चुनें",
+        close = "बंद करें", copyCode = "कोड कॉपी करें", codeCopied = "कोड कॉपी हो गया",
+        networkError = "नेटवर्क त्रुटि", queryFailed = "क्वेरी विफल", fetchFailed = "प्राप्त करना विफल",
+        unknownSender = "अज्ञात प्रेषक",
+        cancel = "रद्द करें", rawData = "कच्चा डेटा:",
+        authorHomepage = "लेखक का पेज", projectRepo = "प्रोजेक्ट रिपॉज़िटरी",
+        themeStyle = "थीम", themeDefault = "डिफ़ॉल्ट / Material3", themeHyperOS = "HyperOS"
     )
     "vi" -> Strings(
         title = "Mail Tạm Thời",
@@ -341,7 +417,13 @@ private fun strings(lang: String): Strings = when (lang) {
         version = "Phiên bản", langSelect = "Chọn ngôn ngữ", darkModeSetting = "Cài đặt chế độ tối",
         updateNow = "Cập nhật ngay", updateLater = "Để sau", autoCheckUpdate = "Tự động kiểm tra cập nhật",
         genderMale = "Nam", genderFemale = "Nữ", genderOther = "Khác",
-        genderOccupied = "Giới tính này đã được sử dụng", genderSelect = "Chọn giới tính"
+        genderOccupied = "Giới tính này đã được sử dụng", genderSelect = "Chọn giới tính",
+        close = "Đóng", copyCode = "Sao chép mã", codeCopied = "Đã sao chép mã",
+        networkError = "Lỗi mạng", queryFailed = "Truy vấn thất bại", fetchFailed = "Lấy thất bại",
+        unknownSender = "Người gửi không xác định",
+        cancel = "Hủy", rawData = "Dữ liệu thô:",
+        authorHomepage = "Trang tác giả", projectRepo = "Kho dự án",
+        themeStyle = "Chủ đề", themeDefault = "Mặc định / Material3", themeHyperOS = "HyperOS"
     )
     "th" -> Strings(
         title = "อีเมลชั่วคราว",
@@ -361,7 +443,13 @@ private fun strings(lang: String): Strings = when (lang) {
         version = "เวอร์ชัน", langSelect = "เลือกภาษา", darkModeSetting = "การตั้งค่าโหมดมืด",
         updateNow = "อัปเดตตอนนี้", updateLater = "ทีหลัง", autoCheckUpdate = "ตรวจสอบอัปเดตอัตโนมัติ",
         genderMale = "ชาย", genderFemale = "หญิง", genderOther = "อื่น ๆ",
-        genderOccupied = "เพศนี้ถูกใช้แล้ว", genderSelect = "เลือกเพศ"
+        genderOccupied = "เพศนี้ถูกใช้แล้ว", genderSelect = "เลือกเพศ",
+        close = "ปิด", copyCode = "คัดลอกรหัส", codeCopied = "คัดลอกรหัสแล้ว",
+        networkError = "ข้อผิดพลาดเครือข่าย", queryFailed = "การสอบถามล้มเหลว", fetchFailed = "ดึงข้อมูลล้มเหลว",
+        unknownSender = "ผู้ส่งที่ไม่รู้จัก",
+        cancel = "ยกเลิก", rawData = "ข้อมูลดิบ:",
+        authorHomepage = "หน้าผู้เขียน", projectRepo = "ที่เก็บโปรเจ็กต์",
+        themeStyle = "ธีม", themeDefault = "ค่าเริ่มต้น / Material3", themeHyperOS = "HyperOS"
     )
     "id" -> Strings(
         title = "Email Sementara",
@@ -381,7 +469,13 @@ private fun strings(lang: String): Strings = when (lang) {
         version = "Versi", langSelect = "Pilih Bahasa", darkModeSetting = "Pengaturan Mode Gelap",
         updateNow = "Perbarui Sekarang", updateLater = "Nanti", autoCheckUpdate = "Periksa Pembaruan Otomatis",
         genderMale = "Pria", genderFemale = "Wanita", genderOther = "Lainnya",
-        genderOccupied = "Jenis kelamin ini sudah digunakan", genderSelect = "Pilih jenis kelamin"
+        genderOccupied = "Jenis kelamin ini sudah digunakan", genderSelect = "Pilih jenis kelamin",
+        close = "Tutup", copyCode = "Salin Kode", codeCopied = "Kode disalin",
+        networkError = "Kesalahan jaringan", queryFailed = "Kueri gagal", fetchFailed = "Gagal mengambil",
+        unknownSender = "Pengirim tidak dikenal",
+        cancel = "Batal", rawData = "Data mentah:",
+        authorHomepage = "Halaman Penulis", projectRepo = "Repositori Proyek",
+        themeStyle = "Tema", themeDefault = "Default / Material3", themeHyperOS = "HyperOS"
     )
     else -> Strings(
         title = "临时邮箱",
@@ -401,7 +495,13 @@ private fun strings(lang: String): Strings = when (lang) {
         version = "版本", langSelect = "选择语言", darkModeSetting = "深色模式设置",
         updateNow = "在线更新", updateLater = "暂不更新", autoCheckUpdate = "启动时自动检查更新",
         genderMale = "男", genderFemale = "女", genderOther = "其他",
-        genderOccupied = "该性别已被占用", genderSelect = "选择性别"
+        genderOccupied = "该性别已被占用", genderSelect = "选择性别",
+        close = "关闭", copyCode = "复制验证码", codeCopied = "验证码已复制",
+        networkError = "网络错误", queryFailed = "查询失败", fetchFailed = "获取失败",
+        unknownSender = "未知发件人",
+        cancel = "取消", rawData = "原始数据:",
+        authorHomepage = "作者主页", projectRepo = "项目仓库",
+        themeStyle = "主题风格", themeDefault = "默认 / Material3", themeHyperOS = "HyperOS 风格"
     )
 }
 
@@ -416,7 +516,8 @@ data class EmailItem(
     val subject: String,
     val time: String,
     val body: String,
-    val htmlBody: String = ""
+    val htmlBody: String = "",
+    val timestamp: Long = 0L
 )
 
 data class HistoryEmail(
@@ -434,7 +535,8 @@ data class AppState(
     val currentTab: Tab = Tab.Inbox,
     val isDarkMode: Boolean = false,
     val language: String = "zh",
-    val autoCheckUpdate: Boolean = true
+    val autoCheckUpdate: Boolean = true,
+    val themeStyle: ThemeStyle = ThemeStyle.Material3
 )
 
 private val disclaimerText = """
@@ -476,16 +578,27 @@ class MainActivity : ComponentActivity() {
         setContent {
             val context = LocalContext.current
             val prefs = remember { context.getSharedPreferences("app", Context.MODE_PRIVATE) }
-            var state by remember {
+            var state by rememberSaveable(stateSaver = AppStateSaver) {
                 mutableStateOf(AppState(
                     language = prefs.getString("language", "zh") ?: "zh",
                     isDarkMode = prefs.getBoolean("isDarkMode", false),
-                    autoCheckUpdate = prefs.getBoolean("autoCheckUpdate", true)
+                    autoCheckUpdate = prefs.getBoolean("autoCheckUpdate", true),
+                    themeStyle = ThemeStyle.fromKey(prefs.getString("themeStyle", ThemeStyle.Material3.key))
                 ))
             }
             val snackbar = remember { SnackbarHostState() }
             val scope = rememberCoroutineScope()
             val s = strings(state.language)
+
+            // 应用内深色开关与系统夜间模式相互独立，状态栏/导航栏图标颜色需跟随应用主题
+            val view = LocalView.current
+            LaunchedEffect(state.isDarkMode) {
+                val window = (view.context as? android.app.Activity)?.window ?: return@LaunchedEffect
+                androidx.core.view.WindowCompat.getInsetsController(window, view).apply {
+                    isAppearanceLightStatusBars = !state.isDarkMode
+                    isAppearanceLightNavigationBars = !state.isDarkMode
+                }
+            }
 
             var showDisclaimer by remember { mutableStateOf(!prefs.getBoolean("disclaimer_accepted", false)) }
             var selectedGender by remember { mutableStateOf("") }
@@ -494,6 +607,7 @@ class MainActivity : ComponentActivity() {
             var updateUrl by remember { mutableStateOf("") }
             var updateTag by remember { mutableStateOf("") }
             var updateBody by remember { mutableStateOf("") }
+            var updateSha by remember { mutableStateOf("") }
             var showDownloadProgress by remember { mutableStateOf(false) }
             var downloadProgress by remember { mutableStateOf(0) }
             var poem by remember { mutableStateOf<PoemLine?>(null) }
@@ -505,31 +619,61 @@ class MainActivity : ComponentActivity() {
                     .build()
             }
 
-            fun downloadInstall(url: String) {
+            // 从"未知来源"授权页返回后自动续跑下载（仍未授权则 downloadInstall 内再次跳转）
+            var retryDownload by remember { mutableStateOf(false) }
+            val installPermissionLauncher = rememberLauncherForActivityResult(
+                ActivityResultContracts.StartActivityForResult()
+            ) {
+                retryDownload = true
+            }
+
+            var downloadCall by remember { mutableStateOf<okhttp3.Call?>(null) }
+
+            fun downloadInstall(url: String, expectedSha256: String) {
+                if (expectedSha256.isBlank()) {
+                    // 缺少校验信息时拒绝下载，防止更新链路被篡改
+                    scope.launch { snackbar.showSnackbar(s.updateFail) }
+                    return
+                }
                 if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
                     if (!context.packageManager.canRequestPackageInstalls()) {
                         val intent = Intent(android.provider.Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES).apply {
                             data = Uri.parse("package:${context.packageName}")
                         }
-                        context.startActivity(intent)
+                        installPermissionLauncher.launch(intent)
                         return
                     }
                 }
                 showDownloadProgress = true
                 downloadProgress = 0
                 scope.launch(Dispatchers.IO) {
+                    var file: java.io.File? = null
                     try {
-                        val dir = context.getExternalFilesDir(null) ?: return@launch
-                        val file = java.io.File(dir, "app-release.apk")
+                        val base = context.getExternalFilesDir(null)
+                        if (base == null) {
+                            withContext(Dispatchers.Main) {
+                                showDownloadProgress = false
+                                scope.launch { snackbar.showSnackbar(s.updateFail) }
+                            }
+                            return@launch
+                        }
+                        val dir = java.io.File(base, "updates")
+                        dir.mkdirs()
+                        val f = java.io.File(dir, "app-release.apk")
+                        file = f
                         val dl = Request.Builder().url(url).get().build()
-                        val resp = client.newCall(dl).execute()
+                        val call = client.newCall(dl)
+                        downloadCall = call
+                        val resp = call.execute()
                         val total = resp.body?.contentLength() ?: -1L
                         val source = resp.body?.byteStream() ?: return@launch
-                        file.outputStream().use { out ->
+                        val md = java.security.MessageDigest.getInstance("SHA-256")
+                        f.outputStream().use { out ->
                             val buf = ByteArray(8192)
                             var read: Int
                             var sofar = 0L
                             while (source.read(buf).also { read = it } != -1) {
+                                md.update(buf, 0, read)
                                 out.write(buf, 0, read)
                                 sofar += read
                                 if (total > 0) {
@@ -538,9 +682,19 @@ class MainActivity : ComponentActivity() {
                                 }
                             }
                         }
+                        resp.close()
+                        val actual = md.digest().joinToString("") { "%02x".format(it) }
+                        if (!actual.equals(expectedSha256, ignoreCase = true)) {
+                            f.delete()
+                            withContext(Dispatchers.Main) {
+                                showDownloadProgress = false
+                                scope.launch { snackbar.showSnackbar(s.updateFail) }
+                            }
+                            return@launch
+                        }
                         withContext(Dispatchers.Main) { showDownloadProgress = false }
                         val uri = FileProvider.getUriForFile(context,
-                            "${context.packageName}.fileprovider", file)
+                            "${context.packageName}.fileprovider", f)
                         val intent = Intent(Intent.ACTION_VIEW).apply {
                             setDataAndType(uri, "application/vnd.android.package-archive")
                             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
@@ -548,11 +702,25 @@ class MainActivity : ComponentActivity() {
                         }
                         context.startActivity(intent)
                     } catch (e: Exception) {
+                        // 用户主动取消不提示错误；失败/取消都删除不完整的安装包
+                        try { file?.delete() } catch (_: Exception) { }
                         withContext(Dispatchers.Main) {
                             showDownloadProgress = false
-                            scope.launch { snackbar.showSnackbar(s.updateFail) }
+                            if (downloadCall?.isCanceled() != true) {
+                                scope.launch { snackbar.showSnackbar(s.updateFail) }
+                            }
                         }
+                    } finally {
+                        downloadCall = null
                     }
+                }
+            }
+
+            // 授权返回后由标志位驱动重试下载
+            LaunchedEffect(retryDownload) {
+                if (retryDownload) {
+                    retryDownload = false
+                    downloadInstall(updateUrl, updateSha)
                 }
             }
 
@@ -566,7 +734,14 @@ class MainActivity : ComponentActivity() {
                             .get().build()
                         val body = client.newCall(r).execute().body?.string() ?: ""
                         val j = JSONObject(body)
-                        val tag = j.optString("tag_name", "").removePrefix("v")
+                        val tag = j.optString("tag_name", "").removePrefix("v").trim()
+                        if (tag.isBlank()) {
+                            // 非 Release 响应（限流 403 / 拦截页 / API 变更），不能误报为"已是最新"
+                            if (isManual) withContext(Dispatchers.Main) {
+                                scope.launch { snackbar.showSnackbar(s.updateFail) }
+                            }
+                            return@launch
+                        }
                         val cur = com.tempmail.app.BuildConfig.VERSION_NAME
                         if (versionCompare(tag, cur) <= 0) {
                             if (isManual) withContext(Dispatchers.Main) {
@@ -575,12 +750,20 @@ class MainActivity : ComponentActivity() {
                             return@launch
                         }
                         val assets = j.optJSONArray("assets") ?: return@launch
-                        val url = assets.getJSONObject(0).optString("browser_download_url", "")
+                        val asset = assets.getJSONObject(0)
+                        val url = asset.optString("browser_download_url", "")
                         if (url.isBlank()) return@launch
+                        val releaseNotes = j.optString("body", "")
+                        // 优先使用 GitHub Release asset 的 digest 字段，其次从发版说明中提取 64 位十六进制哈希
+                        var sha = asset.optString("digest", "").removePrefix("sha256:").trim()
+                        if (!sha.matches(Regex("^[0-9a-fA-F]{64}$"))) {
+                            sha = Regex("\\b[0-9a-fA-F]{64}\\b").find(releaseNotes)?.value ?: ""
+                        }
                         withContext(Dispatchers.Main) {
                             updateTag = tag
                             updateUrl = url
-                            updateBody = j.optString("body", "")
+                            updateSha = sha
+                            updateBody = releaseNotes
                             showUpdateDialog = true
                         }
                     } catch (e: Exception) {
@@ -595,8 +778,12 @@ class MainActivity : ComponentActivity() {
                 state = state.copy(isLoading = true)
                 scope.launch(Dispatchers.IO) {
                     try {
+                        val apiUrl = "https://api.pearapi.ai/api/email/".toHttpUrl().newBuilder()
+                            .addQueryParameter("type", "receive")
+                            .addQueryParameter("email", e)
+                            .build()
                         val r = Request.Builder()
-                            .url("https://api.pearapi.ai/api/email/?type=receive&email=$e")
+                            .url(apiUrl)
                             .get().build()
                         val body = client.newCall(r).execute().body?.string() ?: ""
                         val j = JSONObject(body)
@@ -607,13 +794,13 @@ class MainActivity : ComponentActivity() {
                         } else {
                             withContext(Dispatchers.Main) {
                                 state = state.copy(isLoading = false)
-                                scope.launch { snackbar.showSnackbar(j.optString("msg", "查询失败")) }
+                                scope.launch { snackbar.showSnackbar(j.optString("msg", s.queryFailed)) }
                             }
                         }
                     } catch (e: Exception) {
                         withContext(Dispatchers.Main) {
                             state = state.copy(isLoading = false)
-                            scope.launch { snackbar.showSnackbar(e.message ?: "网络错误") }
+                            scope.launch { snackbar.showSnackbar(e.message ?: s.networkError) }
                         }
                     }
                 }
@@ -627,7 +814,16 @@ class MainActivity : ComponentActivity() {
                 poem = withContext(Dispatchers.IO) { fetchRandomPoemLine(client) }
             }
 
-            TempMailTheme(darkTheme = state.isDarkMode) {
+            // 清理上次更新遗留的安装包
+            LaunchedEffect(Unit) {
+                withContext(Dispatchers.IO) {
+                    try {
+                        java.io.File(context.getExternalFilesDir(null), "updates/app-release.apk").delete()
+                    } catch (_: Exception) { }
+                }
+            }
+
+            TempMailTheme(darkTheme = state.isDarkMode, themeStyle = state.themeStyle) {
                 Scaffold(
                     snackbarHost = { SnackbarHost(snackbar) },
                     bottomBar = {
@@ -679,7 +875,7 @@ class MainActivity : ComponentActivity() {
                                 Row(
                                     Modifier.fillMaxWidth()
                                         .clickable { selectedGender = value }
-                                        .clip(RoundedCornerShape(8.dp))
+                                        .clip(MaterialTheme.shapes.small)
                                         .padding(vertical = 8.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
@@ -701,7 +897,7 @@ class MainActivity : ComponentActivity() {
                                     }
                                 },
                                 modifier = Modifier.fillMaxWidth().height(56.dp),
-                                shape = RoundedCornerShape(16.dp),
+                                shape = MaterialTheme.shapes.large,
                                 elevation = ButtonDefaults.buttonElevation(defaultElevation = 4.dp)
                             ) {
                                 Icon(Icons.Default.Check, contentDescription = null)
@@ -721,8 +917,8 @@ class MainActivity : ComponentActivity() {
                             label = "tabContent"
                         ) { tab ->
                             when (tab) {
-                                Tab.Inbox -> InboxTab(p, state, snackbar, scope, context, s, client, poem, ::doRefresh) { newState ->
-                                    state = newState
+                                Tab.Inbox -> InboxTab(p, state, snackbar, scope, context, s, client, poem, ::doRefresh) { updater ->
+                                    state = updater(state)
                                 }
                                 Tab.History -> HistoryTab(p, state, s) { email ->
                                     val newHistory = if (state.email.isNotBlank() && state.email != email)
@@ -747,6 +943,9 @@ class MainActivity : ComponentActivity() {
                                     if (newState.autoCheckUpdate != state.autoCheckUpdate) {
                                         prefs.edit().putBoolean("autoCheckUpdate", newState.autoCheckUpdate).apply()
                                     }
+                                    if (newState.themeStyle != state.themeStyle) {
+                                        prefs.edit().putString("themeStyle", newState.themeStyle.key).apply()
+                                    }
                                     state = newState
                                 }
                             }
@@ -767,7 +966,7 @@ class MainActivity : ComponentActivity() {
                         confirmButton = {
                             TextButton(onClick = {
                                 showUpdateDialog = false
-                                downloadInstall(updateUrl)
+                                downloadInstall(updateUrl, updateSha)
                             }) { Text(s.updateNow) }
                         },
                         dismissButton = {
@@ -777,7 +976,10 @@ class MainActivity : ComponentActivity() {
                 }
                 if (showDownloadProgress) {
                     AlertDialog(
-                        onDismissRequest = {},
+                        onDismissRequest = {
+                            downloadCall?.cancel()
+                            showDownloadProgress = false
+                        },
                         title = { Text(s.updating) },
                         text = {
                             Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
@@ -786,7 +988,13 @@ class MainActivity : ComponentActivity() {
                                 Text("${downloadProgress}%")
                             }
                         },
-                        confirmButton = {}
+                        confirmButton = {},
+                        dismissButton = {
+                            TextButton(onClick = {
+                                downloadCall?.cancel()
+                                showDownloadProgress = false
+                            }) { Text(s.cancel) }
+                        }
                     )
                 }
             }
@@ -805,7 +1013,7 @@ private fun InboxTab(
     client: OkHttpClient,
     poem: PoemLine?,
     doRefresh: (String, (Int, String) -> Unit) -> Unit,
-    onState: (AppState) -> Unit
+    onState: ((AppState) -> AppState) -> Unit
 ) {
     var showBodyDialog by remember { mutableStateOf(false) }
     var dialogBody by remember { mutableStateOf("") }
@@ -857,7 +1065,7 @@ private fun InboxTab(
 
         Button(
             onClick = {
-                onState(state.copy(isLoading = true))
+                onState { it.copy(isLoading = true) }
                 scope.launch(Dispatchers.IO) {
                     try {
                         val r = Request.Builder()
@@ -867,42 +1075,45 @@ private fun InboxTab(
                         val j = JSONObject(body)
                         if (j.optString("code") == "200") {
                             val newEmail = j.optString("email", "")
-                            val newHistory = if (state.email.isNotBlank())
-                                state.history + HistoryEmail(state.email, false)
-                            else state.history
                             withContext(Dispatchers.Main) {
-                                onState(state.copy(
-                                    email = newEmail, count = 0,
-                                    rawMessages = emptyList(), items = emptyList(),
-                                    history = newHistory, isLoading = false
-                                ))
+                                // 基于写入时的最新状态合并历史，避免覆盖请求期间的其他状态变更
+                                onState { cur ->
+                                    val newHistory = if (cur.email.isNotBlank())
+                                        cur.history + HistoryEmail(cur.email, false)
+                                    else cur.history
+                                    cur.copy(
+                                        email = newEmail, count = 0,
+                                        rawMessages = emptyList(), items = emptyList(),
+                                        history = newHistory, isLoading = false
+                                    )
+                                }
                             }
                         } else {
                             withContext(Dispatchers.Main) {
-                                onState(state.copy(isLoading = false))
-                                scope.launch { snackbar.showSnackbar(j.optString("msg", "获取失败")) }
+                                onState { it.copy(isLoading = false) }
+                                scope.launch { snackbar.showSnackbar(j.optString("msg", s.fetchFailed)) }
                             }
                         }
                     } catch (e: Exception) {
                         withContext(Dispatchers.Main) {
-                            onState(state.copy(isLoading = false))
-                            scope.launch { snackbar.showSnackbar(e.message ?: "网络错误") }
+                            onState { it.copy(isLoading = false) }
+                            scope.launch { snackbar.showSnackbar(e.message ?: s.networkError) }
                         }
                     }
                 }
             },
             enabled = !state.isLoading,
             modifier = Modifier.fillMaxWidth().height(52.dp),
-            shape = RoundedCornerShape(14.dp)
+            shape = themedCornerShape(14.dp, 20.dp)
         ) { Text(if (state.isLoading) s.generating else s.generate) }
 
         if (state.email.isNotBlank()) {
             Spacer(Modifier.height(20.dp))
-            Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)) {
+            Card(modifier = Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.large) {
                 Column(Modifier.padding(20.dp)) {
                     Text(s.yourEmail, style = MaterialTheme.typography.labelLarge)
                     Spacer(Modifier.height(12.dp))
-                    Text("${s.receivedCount}: ${state.count}", style = MaterialTheme.typography.labelSmall)
+                    Text("${s.receivedCount}: ${state.items.size}", style = MaterialTheme.typography.labelSmall)
                     Spacer(Modifier.height(12.dp))
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(state.email,
@@ -918,28 +1129,33 @@ private fun InboxTab(
                             onClick = {
                                 val emailAtRefresh = state.email
                                 doRefresh(emailAtRefresh) { cnt, raw ->
-                                    if (state.email != emailAtRefresh) {
-                                        onState(state.copy(isLoading = false))
-                                        return@doRefresh
+                                    val newItems = if (raw.isBlank()) emptyList()
+                                        else parseEmails(raw, s.unknownSender)
+                                    var mergedSize = -1
+                                    // 基于写入时的最新状态更新，避免覆盖刷新期间切换的设置项
+                                    onState { cur ->
+                                        if (cur.email != emailAtRefresh) {
+                                            cur.copy(isLoading = false)
+                                        } else {
+                                            val merged = mergeEmailItems(cur.items, newItems)
+                                            mergedSize = merged.size
+                                            Log.d("MAIL_DEBUG", "API返回count=$cnt 解析后=${newItems.size} 已有=${cur.items.size} 合并后=${merged.size}")
+                                            // rawMessages 在内存中同样限长，避免长会话单调增长
+                                            val newRaws = if (raw.isBlank()) cur.rawMessages
+                                                else (cur.rawMessages + raw).takeLast(5)
+                                            cur.copy(
+                                                count = cnt, rawMessages = newRaws,
+                                                items = merged, isLoading = false
+                                            )
+                                        }
                                     }
-                        val newItems = if (raw.isBlank()) emptyList()
-                            else parseEmails(raw)
-                        Log.d("MAIL_DEBUG", "API返回count=$cnt 解析后=${newItems.size} 已有=${state.items.size}")
-                        val merged = mergeEmailItems(state.items, newItems)
-                        Log.d("MAIL_DEBUG", "合并后=${merged.size}")
-                                    val newRaws = if (raw.isBlank()) state.rawMessages
-                                        else state.rawMessages + listOf(raw)
-                                    onState(state.copy(
-                                        count = cnt, rawMessages = newRaws,
-                                        items = merged, isLoading = false
-                                    ))
                                     scope.launch {
                                         if (raw.isBlank()) snackbar.showSnackbar(s.noNewMail)
-                                        else if (merged.isEmpty()) snackbar.showSnackbar(s.parseError)
+                                        else if (mergedSize == 0) snackbar.showSnackbar(s.parseError)
                                     }
                                 }
                             },
-                            shape = RoundedCornerShape(12.dp)
+                            shape = MaterialTheme.shapes.medium
                         ) { Text(s.refresh) }
                     }
                 }
@@ -950,7 +1166,11 @@ private fun InboxTab(
             Spacer(Modifier.height(16.dp))
             Text(s.inbox, style = MaterialTheme.typography.titleMedium)
             Spacer(Modifier.height(8.dp))
-            val sorted = state.items.sortedByDescending { it.time }
+            val sorted = remember(state.items) {
+                state.items.sortedWith(
+                    compareByDescending<EmailItem> { it.timestamp }.thenByDescending { it.time }
+                )
+            }
             sorted.forEach { item ->
                 Card(
                     Modifier.fillMaxWidth().padding(vertical = 4.dp)
@@ -961,7 +1181,7 @@ private fun InboxTab(
                             dialogHtml = item.htmlBody
                             showBodyDialog = true
                         },
-                    shape = RoundedCornerShape(12.dp)
+                    shape = MaterialTheme.shapes.medium
                 ) {
                     Column(Modifier.padding(16.dp)) {
                         Text(item.from, style = MaterialTheme.typography.labelLarge,
@@ -989,7 +1209,7 @@ private fun InboxTab(
 
         if (state.rawMessages.isNotEmpty() && state.items.isEmpty()) {
             Spacer(Modifier.height(16.dp))
-            Text("原始数据:", style = MaterialTheme.typography.titleMedium)
+            Text(s.rawData, style = MaterialTheme.typography.titleMedium)
             Spacer(Modifier.height(8.dp))
             state.rawMessages.reversed().forEach { raw ->
                 Card(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
@@ -1007,13 +1227,26 @@ private fun InboxTab(
             title = { Text(s.inbox) },
             text = {
                 Column {
+                    // 对话框关闭时销毁 WebView，防止每打开一封邮件就泄漏一个原生实例
+                    val webViewHolder = remember { arrayOfNulls<WebView>(1) }
+                    DisposableEffect(Unit) {
+                        onDispose {
+                            webViewHolder[0]?.let { wv ->
+                                wv.stopLoading()
+                                wv.loadUrl("about:blank")
+                                wv.destroy()
+                            }
+                            webViewHolder[0] = null
+                        }
+                    }
                     AndroidView(
                         factory = { ctx ->
                             WebView(ctx).apply {
                                 settings.javaScriptEnabled = true
                                 settings.domStorageEnabled = true
-                                settings.allowFileAccess = true
-                                settings.loadsImagesAutomatically = true
+                                settings.allowFileAccess = false
+                                // 不自动加载远程图片，避免追踪像素泄露用户 IP 与"已读"状态
+                                settings.loadsImagesAutomatically = false
                                 setBackgroundColor(android.graphics.Color.TRANSPARENT)
                                 webChromeClient = object : WebChromeClient() {
                                     override fun onCreateWindow(
@@ -1025,18 +1258,21 @@ private fun InboxTab(
                                         val transport = resultMsg?.obj as? WebView.WebViewTransport ?: return false
                                         val newWebView = WebView(view?.context ?: ctx).apply {
                                             settings.javaScriptEnabled = true
+                                            settings.allowFileAccess = false
                                             webViewClient = object : WebViewClient() {
                                                 override fun shouldOverrideUrlLoading(
                                                     v: WebView?,
                                                     r: android.webkit.WebResourceRequest?
                                                 ): Boolean {
                                                     openMailLink(v, r?.url)
+                                                    v?.destroy()
                                                     return true
                                                 }
 
                                                 @Deprecated("Deprecated in Java")
                                                 override fun shouldOverrideUrlLoading(v: WebView?, url: String?): Boolean {
                                                     openMailLink(v, url?.let { Uri.parse(it) })
+                                                    v?.destroy()
                                                     return true
                                                 }
                                             }
@@ -1077,7 +1313,7 @@ private fun InboxTab(
                                 } else {
                                     loadDataWithBaseURL("https://example.com", dialogBody, "text/plain", "UTF-8", null)
                                 }
-                            }
+                            }.also { webViewHolder[0] = it }
                         },
                         modifier = Modifier
                             .fillMaxWidth()
@@ -1086,15 +1322,15 @@ private fun InboxTab(
                 }
             },
             confirmButton = {
-                TextButton(onClick = { showBodyDialog = false }) { Text("关闭") }
+                TextButton(onClick = { showBodyDialog = false }) { Text(s.close) }
             },
             dismissButton = code?.let { c ->
                 {
                     TextButton(onClick = {
                         (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager)
                             .setPrimaryClip(ClipData.newPlainText("verification_code", c))
-                        scope.launch { snackbar.showSnackbar("验证码已复制: $c") }
-                    }) { Text("复制验证码") }
+                        scope.launch { snackbar.showSnackbar("${s.codeCopied}: $c") }
+                    }) { Text(s.copyCode) }
                 }
             }
         )
@@ -1132,7 +1368,7 @@ private fun HistoryTab(
                 Card(
                     Modifier.fillMaxWidth().padding(vertical = 4.dp)
                         .then(if (!h.isActive) Modifier.clickable { onUseEmail(h.email) } else Modifier),
-                    shape = RoundedCornerShape(12.dp)
+                    shape = MaterialTheme.shapes.medium
                 ) {
                     Column(Modifier.padding(16.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -1143,7 +1379,7 @@ private fun HistoryTab(
                                 modifier = Modifier.weight(1f))
                             if (h.isActive) {
                                 Surface(
-                                    shape = RoundedCornerShape(6.dp),
+                                    shape = themedCornerShape(6.dp, 12.dp),
                                     color = MaterialTheme.colorScheme.primary
                                 ) {
                                     Text(
@@ -1155,7 +1391,7 @@ private fun HistoryTab(
                                 }
                             } else {
                                 Surface(
-                                    shape = RoundedCornerShape(6.dp),
+                                    shape = themedCornerShape(6.dp, 12.dp),
                                     color = MaterialTheme.colorScheme.error
                                 ) {
                                     Text(
@@ -1178,7 +1414,7 @@ private fun HistoryTab(
     }
 }
 
-private enum class SettingsPage { Main, Language, DarkMode, About, Author }
+private enum class SettingsPage { Main, Language, DarkMode, Theme, About, Author }
 
 @Composable
 private fun SettingsTab(
@@ -1215,7 +1451,7 @@ private fun SettingsTab(
                             Text(s.settings, style = MaterialTheme.typography.headlineSmall)
                             Spacer(Modifier.height(24.dp))
 
-                            Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)) {
+                            Card(Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.large) {
                                 Column {
                                     SettingsItem(
                                         label = s.languageLabel,
@@ -1227,6 +1463,12 @@ private fun SettingsTab(
                                         label = s.darkMode,
                                         value = if (state.isDarkMode) "ON" else "OFF",
                                         onClick = { page = SettingsPage.DarkMode }
+                                    )
+                                    Divider(modifier = Modifier.padding(horizontal = 16.dp))
+                                    SettingsItem(
+                                        label = s.themeStyle,
+                                        value = if (state.themeStyle == ThemeStyle.HyperOS) s.themeHyperOS else s.themeDefault,
+                                        onClick = { page = SettingsPage.Theme }
                                     )
                             Divider(modifier = Modifier.padding(horizontal = 16.dp))
                             SettingsItem(
@@ -1247,7 +1489,8 @@ private fun SettingsTab(
                                     modifier = Modifier.weight(1f))
                                 Switch(
                                     checked = state.autoCheckUpdate,
-                                    onCheckedChange = { onState(state.copy(autoCheckUpdate = it)) }
+                                    onCheckedChange = { onState(state.copy(autoCheckUpdate = it)) },
+                                    colors = themedSwitchColors()
                                 )
                             }
                             Divider(modifier = Modifier.padding(horizontal = 16.dp))
@@ -1267,7 +1510,7 @@ private fun SettingsTab(
                             Text(s.langSelect, style = MaterialTheme.typography.headlineSmall)
                             Spacer(Modifier.height(20.dp))
 
-                            Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)) {
+                            Card(Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.large) {
                                 Column {
                                     allLanguages.forEachIndexed { i, lang ->
                                         if (i > 0) Divider(modifier = Modifier.padding(horizontal = 16.dp))
@@ -1286,7 +1529,7 @@ private fun SettingsTab(
                             Text(s.darkModeSetting, style = MaterialTheme.typography.headlineSmall)
                             Spacer(Modifier.height(20.dp))
 
-                            Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)) {
+                            Card(Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.large) {
                                 Row(
                                     Modifier.padding(horizontal = 20.dp, vertical = 16.dp).fillMaxWidth(),
                                     verticalAlignment = Alignment.CenterVertically
@@ -1295,8 +1538,28 @@ private fun SettingsTab(
                                         modifier = Modifier.weight(1f))
                                     Switch(
                                         checked = state.isDarkMode,
-                                        onCheckedChange = { onState(state.copy(isDarkMode = it)) }
+                                        onCheckedChange = { onState(state.copy(isDarkMode = it)) },
+                                        colors = themedSwitchColors()
                                     )
+                                }
+                            }
+                        }
+
+                        SettingsPage.Theme -> {
+                            IconButton(onClick = { page = SettingsPage.Main }) {
+                                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = s.back)
+                            }
+                            Spacer(Modifier.height(8.dp))
+                            Text(s.themeStyle, style = MaterialTheme.typography.headlineSmall)
+                            Spacer(Modifier.height(20.dp))
+
+                            Card(Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.large) {
+                                Column {
+                                    LanguageOption(s.themeDefault, state.themeStyle == ThemeStyle.Material3,
+                                        onClick = { onState(state.copy(themeStyle = ThemeStyle.Material3)); page = SettingsPage.Main })
+                                    Divider(modifier = Modifier.padding(horizontal = 16.dp))
+                                    LanguageOption(s.themeHyperOS, state.themeStyle == ThemeStyle.HyperOS,
+                                        onClick = { onState(state.copy(themeStyle = ThemeStyle.HyperOS)); page = SettingsPage.Main })
                                 }
                             }
                         }
@@ -1308,7 +1571,7 @@ private fun SettingsTab(
                             Spacer(Modifier.height(8.dp))
                             Text(s.about, style = MaterialTheme.typography.headlineSmall)
                             Spacer(Modifier.height(20.dp))
-                            Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)) {
+                            Card(Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.large) {
                                 Column(Modifier.padding(20.dp)) {
                                     Text(s.aboutDesc, style = MaterialTheme.typography.bodyMedium)
                                 }
@@ -1322,11 +1585,11 @@ private fun SettingsTab(
                     Spacer(Modifier.height(8.dp))
                     Text(s.author, style = MaterialTheme.typography.headlineSmall)
                     Spacer(Modifier.height(20.dp))
-                    Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)) {
+                    Card(Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.large) {
                         Column(Modifier.padding(20.dp)) {
                             Text("GitHub", style = MaterialTheme.typography.labelLarge)
                             Spacer(Modifier.height(4.dp))
-                            Text("作者主页",
+                            Text(s.authorHomepage,
                                 style = MaterialTheme.typography.bodyMedium.copy(
                                     textDecoration = TextDecoration.Underline,
                                     color = MaterialTheme.colorScheme.primary
@@ -1336,7 +1599,7 @@ private fun SettingsTab(
                                         Uri.parse("https://github.com/wzhdgithub")))
                                 })
                             Spacer(Modifier.height(4.dp))
-                            Text("项目仓库",
+                            Text(s.projectRepo,
                                 style = MaterialTheme.typography.bodyMedium.copy(
                                     textDecoration = TextDecoration.Underline,
                                     color = MaterialTheme.colorScheme.primary
@@ -1422,7 +1685,7 @@ private fun LanguageOption(label: String, selected: Boolean, onClick: () -> Unit
     }
 }
 
-private fun parseEmails(raw: String): List<EmailItem> {
+private fun parseEmails(raw: String, defaultFrom: String = ""): List<EmailItem> {
     val result = mutableListOf<EmailItem>()
     val text = raw.trim()
     if (text.isBlank()) return result
@@ -1452,7 +1715,8 @@ private fun parseEmails(raw: String): List<EmailItem> {
     if (result.isEmpty() && text.isNotBlank()) {
         result.add(EmailItem(from = "", subject = "", time = "", body = text))
     }
-    return result
+    // 纯文本或缺字段邮件没有发件人信息，统一用本地化占位避免列表出现空白发件人
+    return result.map { if (it.from.isBlank() && defaultFrom.isNotBlank()) it.copy(from = defaultFrom) else it }
 }
 
 private fun parseEmailObject(obj: JSONObject): EmailItem {
@@ -1548,7 +1812,8 @@ private fun parseEmailObject(obj: JSONObject): EmailItem {
         if (htmlBody.isNotBlank()) stripHtml(htmlBody) else ""
     }
     Log.d("MAIL_DEBUG", "parseEmailObject: from=$from sub=${subject.take(30)} body=${displayBody.take(80)}")
-    return EmailItem(from = from, subject = subject, time = time, body = displayBody, htmlBody = htmlBody)
+    return EmailItem(from = from, subject = subject, time = time, body = displayBody, htmlBody = htmlBody,
+        timestamp = parseEmailTime(time))
 }
 
 private fun looksLikeHtml(text: String): Boolean {
@@ -1676,7 +1941,135 @@ private fun extractVerificationCode(text: String): String? {
         .find(text)?.groupValues?.get(1)?.let { return it }
     Regex("(?i)code\\s+(?:below|above|here)[\\s:]*\\n?\\s*([0-9]{4,8})")
         .find(text)?.groupValues?.get(1)?.let { return it }
-    Regex("(?:^|\\s|\\n|\\r)((?!20\\d{2})[0-9]{4,8})(?:\\s|$|\\n|\\r|\\.|,)")
+    // 兜底规则：仅当 20XX 整体是 4 位数字（后不接数字）才视为年份排除，202501 这类 6 位验证码不受影响
+    Regex("(?:^|\\s)((?!20\\d{2}(?![0-9]))[0-9]{4,8})(?:\\s|$|\\.|,)")
         .find(text)?.groupValues?.get(1)?.let { return it }
     return null
 }
+
+// 将 API 返回的时间字符串解析为毫秒时间戳，兼容多种格式；解析失败返回 0（排序时沉底）
+private fun parseEmailTime(time: String): Long {
+    val t = time.trim()
+    if (t.isEmpty()) return 0L
+    // 纯数字时间戳：10 位按秒、13 位按毫秒
+    if (t.all { it.isDigit() }) {
+        return when (t.length) {
+            10 -> t.toLongOrNull()?.times(1000) ?: 0L
+            13 -> t.toLongOrNull() ?: 0L
+            else -> 0L
+        }
+    }
+    val formats = arrayOf(
+        "yyyy-MM-dd HH:mm:ss",
+        "yyyy-MM-dd'T'HH:mm:ss",
+        "yyyy-MM-dd'T'HH:mm:ss'Z'",
+        "yyyy-MM-dd'T'HH:mm:ssXXX",
+        "yyyy-MM-dd HH:mm",
+        "yyyy/MM/dd HH:mm:ss",
+        "yyyy-MM-dd"
+    )
+    for (f in formats) {
+        try {
+            val sdf = java.text.SimpleDateFormat(f, java.util.Locale.US)
+            sdf.isLenient = false
+            if (f.endsWith("'Z'") || f.endsWith("XXX")) {
+                sdf.timeZone = java.util.TimeZone.getTimeZone("UTC")
+            }
+            val d = sdf.parse(t)
+            if (d != null) return d.time
+        } catch (_: Exception) {
+        }
+    }
+    return 0L
+}
+
+// AppState 序列化为 JSON，用于 rememberSaveable 在配置更改/进程重建后恢复状态。
+// isLoading 不持久化（请求协程已随组合销毁），rawMessages 只保留最近 5 条控制 Bundle 体积。
+private fun appStateToJson(state: AppState): String {
+    val j = JSONObject()
+    j.put("email", state.email)
+    j.put("count", state.count)
+    j.put("language", state.language)
+    j.put("isDarkMode", state.isDarkMode)
+    j.put("autoCheckUpdate", state.autoCheckUpdate)
+    j.put("themeStyle", state.themeStyle.key)
+    j.put("tab", state.currentTab.ordinal)
+    // items 限制条数、正文截断、且不保存 htmlBody（完整 HTML 动辄数十 KB），
+    // 防止写入 Bundle 越过 Binder 事务上限导致 TransactionTooLargeException
+    val items = JSONArray()
+    state.items.takeLast(20).forEach { item ->
+        items.put(JSONObject().apply {
+            put("from", item.from)
+            put("subject", item.subject)
+            put("time", item.time)
+            put("body", item.body.take(2000))
+            put("ts", item.timestamp)
+        })
+    }
+    j.put("items", items)
+    val raws = JSONArray()
+    state.rawMessages.takeLast(5).forEach { raws.put(it) }
+    j.put("raws", raws)
+    val hist = JSONArray()
+    state.history.forEach { h ->
+        hist.put(JSONObject().apply {
+            put("email", h.email)
+            put("active", h.isActive)
+        })
+    }
+    j.put("history", hist)
+    return j.toString()
+}
+
+private fun appStateFromJson(json: String): AppState? {
+    return try {
+        val j = JSONObject(json)
+        val items = mutableListOf<EmailItem>()
+        j.optJSONArray("items")?.let { arr ->
+            for (i in 0 until arr.length()) {
+                val o = arr.optJSONObject(i) ?: continue
+                items.add(
+                    EmailItem(
+                        from = o.optString("from", ""),
+                        subject = o.optString("subject", ""),
+                        time = o.optString("time", ""),
+                        body = o.optString("body", ""),
+                        htmlBody = o.optString("htmlBody", ""),
+                        timestamp = o.optLong("ts", 0L)
+                    )
+                )
+            }
+        }
+        val raws = mutableListOf<String>()
+        j.optJSONArray("raws")?.let { arr ->
+            for (i in 0 until arr.length()) raws.add(arr.optString(i))
+        }
+        val hist = mutableListOf<HistoryEmail>()
+        j.optJSONArray("history")?.let { arr ->
+            for (i in 0 until arr.length()) {
+                val o = arr.optJSONObject(i) ?: continue
+                hist.add(HistoryEmail(o.optString("email", ""), o.optBoolean("active", false)))
+            }
+        }
+        AppState(
+            email = j.optString("email", ""),
+            count = j.optInt("count", 0),
+            rawMessages = raws,
+            items = items,
+            isLoading = false,
+            history = hist,
+            currentTab = Tab.entries.getOrElse(j.optInt("tab", 0)) { Tab.Inbox },
+            isDarkMode = j.optBoolean("isDarkMode", false),
+            language = j.optString("language", "zh"),
+            autoCheckUpdate = j.optBoolean("autoCheckUpdate", true),
+            themeStyle = ThemeStyle.fromKey(j.optString("themeStyle", ThemeStyle.Material3.key))
+        )
+    } catch (e: Exception) {
+        null
+    }
+}
+
+private val AppStateSaver: Saver<AppState, String> = Saver(
+    save = { appStateToJson(it.copy(isLoading = false)) },
+    restore = { appStateFromJson(it) }
+)
