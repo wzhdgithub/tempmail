@@ -2,6 +2,8 @@ package com.tempmail.app.ui.glass
 
 import android.annotation.SuppressLint
 import android.os.Build
+import android.util.Log
+import android.view.HapticFeedbackConstants
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.EaseOut
 import androidx.compose.animation.core.spring
@@ -57,7 +59,7 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -107,6 +109,9 @@ import kotlin.math.sin
 // （已在 AndroidManifest 用 tools:overrideLibrary 放行）。本文件所有 miuix-blur
 // API 仅在 API 33+ 才会被执行：调用方（MainActivity）必须先经 isGlassBlurSupported()
 // 判断，低版本回退到原有伪玻璃底栏，保证低版本设备不会加载该类库。
+
+/** 诊断用日志标签：定位触摸事件与触觉反馈是否被系统接受。 */
+private const val GLASS_TAG = "GlassTouch"
 
 private val GlassBarShape = RoundedCornerShape(28.dp)
 
@@ -292,12 +297,19 @@ private fun GlassBar(
     val onSelectedUpdated by rememberUpdatedState(onSelect)
 
     // 触觉反馈：长按真正进入形变态时一次 LongPress；拖动跨过 Tab 边界时轻 tick
-    val haptic = LocalHapticFeedback.current
-    val hapticLongPress: () -> Unit = remember(haptic) {
-        { haptic.performHapticFeedback(HapticFeedbackType.LongPress) }
+    // 注：此处直接用 View.performHapticFeedback 并记录返回值，便于定位 ROM 是否接受了震动请求
+    val hapticView = LocalView.current
+    val hapticLongPress: () -> Unit = remember(hapticView) {
+        {
+            val accepted = hapticView.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+            Log.i(GLASS_TAG, "长按进入形变态，LONG_PRESS 震动被系统接受=$accepted")
+        }
     }
-    val hapticTick: () -> Unit = remember(haptic) {
-        { haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove) }
+    val hapticTick: () -> Unit = remember(hapticView) {
+        {
+            val accepted = hapticView.performHapticFeedback(HapticFeedbackConstants.TEXT_HANDLE_MOVE)
+            Log.i(GLASS_TAG, "跨 Tab tick，震动被系统接受=$accepted")
+        }
     }
     var lastHapticIndex by remember { mutableIntStateOf(selectedIndex) }
 
@@ -321,7 +333,10 @@ private fun GlassBar(
             holdDelayMillis = HOLD_DELAY_MILLIS,
             onHoldActivated = hapticLongPress,
             canDrag = { offset -> offset.x in 0f..totalWidthPx },
-            onDragStarted = { position -> updateValue(indexAt(position.x).toFloat()) },
+            onDragStarted = { position ->
+                Log.i(GLASS_TAG, "底栏收到按下 x=${position.x.toInt()}（触摸层正常）")
+                updateValue(indexAt(position.x).toFloat())
+            },
             onDragStopped = {
                 // 惯性吸附：位置 + 速度预测（INERTIA_PREDICT_SECONDS 的甩动行程），
                 // 快速甩动即使未越过中点也能吸附到相邻 Tab，慢速拖动则按位置就近吸附
