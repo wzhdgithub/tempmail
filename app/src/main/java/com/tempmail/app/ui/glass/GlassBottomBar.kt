@@ -53,9 +53,11 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.GraphicsLayerScope
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -129,6 +131,9 @@ private const val FLOW_BASELINE = 0.35f
 /** 速度 → 沿运动方向拉伸的系数与上限。 */
 private const val STRETCH_GAIN = 0.06f
 private const val STRETCH_LIMIT = 0.12f
+
+/** 玻璃模糊半径（常量）：拖动过程中不改变，避免反复重建 RenderEffect 链。 */
+private const val BLUR_RADIUS_DP = 4f
 
 /** 底栏高度 + 底部外边距：页面滚动内容需在末尾预留的额外空间（可滚到底栏下方）。 */
 val GlassBarSpace = 88.dp
@@ -221,7 +226,10 @@ fun GlassShell(
         // 预留 GlassBarSpace，保证最后一项仍能完整滚出（见各 Tab 的 bottomOverlap）
         Scaffold(
             modifier = Modifier.fillMaxSize().layerBackdrop(backdrop),
-            snackbarHost = snackbarHost,
+            // Snackbar 需要让出浮起的底栏高度，否则会被玻璃盖住
+            snackbarHost = {
+                Box(Modifier.padding(bottom = GlassBarSpace)) { snackbarHost() }
+            },
             bottomBar = {}
         ) { p ->
             content(p)
@@ -253,6 +261,9 @@ private fun GlassBar(
     val tabContentColor = scheme.onSurfaceVariant
     // 玻璃涂层：半透明底色叠在模糊之上，形成牛奶玻璃质感
     val containerColor = scheme.surface.copy(alpha = 0.35f)
+    // 外阴影强度随主题调整：深色背景上黑色阴影本就更不明显，故用更高不透明度
+    val barShadowColor = if (darkTheme) Color.Black.copy(alpha = 0.5f)
+    else Color.Black.copy(alpha = 0.32f)
 
     val tabsBackdrop = rememberLayerBackdrop()
     val density = LocalDensity.current
@@ -280,6 +291,16 @@ private fun GlassBar(
     var currentIndex by remember { mutableIntStateOf(selectedIndex) }
     val onSelectedUpdated by rememberUpdatedState(onSelect)
 
+    // 触觉反馈：长按真正进入形变态时一次 LongPress；拖动跨过 Tab 边界时轻 tick
+    val haptic = LocalHapticFeedback.current
+    val hapticLongPress: () -> Unit = remember(haptic) {
+        { haptic.performHapticFeedback(HapticFeedbackType.LongPress) }
+    }
+    val hapticTick: () -> Unit = remember(haptic) {
+        { haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove) }
+    }
+    var lastHapticIndex by remember { mutableIntStateOf(selectedIndex) }
+
     fun indexAt(positionX: Float): Int {
         if (tabWidthPx == 0f) return currentIndex
         val horizontalPaddingPx = with(density) { 4.dp.toPx() }
@@ -298,6 +319,7 @@ private fun GlassBar(
             initialScale = 1f,
             pressedScale = 78f / 56f,
             holdDelayMillis = HOLD_DELAY_MILLIS,
+            onHoldActivated = hapticLongPress,
             canDrag = { offset -> offset.x in 0f..totalWidthPx },
             onDragStarted = { position -> updateValue(indexAt(position.x).toFloat()) },
             onDragStopped = {
@@ -323,10 +345,15 @@ private fun GlassBar(
             },
             onDrag = { _, dragAmount ->
                 if (tabWidthPx > 0f && dragAmount.x != 0f) {
-                    updateValue(
-                        (targetValue + dragAmount.x / tabWidthPx * if (isLtr) 1f else -1f)
-                            .coerceIn(0f, (tabsCount - 1).toFloat())
-                    )
+                    val next = (targetValue + dragAmount.x / tabWidthPx * if (isLtr) 1f else -1f)
+                        .coerceIn(0f, (tabsCount - 1).toFloat())
+                    updateValue(next)
+                    // 跨过 Tab 边界时给一次轻触觉反馈
+                    val rounded = next.roundToInt()
+                    if (rounded != lastHapticIndex) {
+                        lastHapticIndex = rounded
+                        hapticTick()
+                    }
                     animationScope.launch {
                         offsetAnimation.snapTo(offsetAnimation.value + dragAmount.x)
                     }
@@ -347,6 +374,8 @@ private fun GlassBar(
         if (currentIndex != index) {
             currentIndex = index
             onSelectedUpdated(index)
+            lastHapticIndex = index
+            hapticTick()
         }
         dampedDragAnimation.animateToValue(index.toFloat())
     }
@@ -386,7 +415,13 @@ private fun GlassBar(
                 }
                 .selectableGroup()
                 .graphicsLayer { translationX = panelOffset }
-                .shadow(elevation = 12.dp, shape = glassShape, clip = false)
+                .shadow(
+                    elevation = 12.dp,
+                    shape = glassShape,
+                    clip = false,
+                    ambientColor = barShadowColor,
+                    spotColor = barShadowColor
+                )
                 .drawBackdrop(
                     backdrop = backdrop,
                     shape = { glassShape },
@@ -394,16 +429,14 @@ private fun GlassBar(
                         // 以下动画值均在 draw 阶段读取：只触发重绘、不触发重组
                         val press = dampedDragAnimation.pressProgress
                         val flow = dampedDragAnimation.dragFlow
-                        // 玻璃"厚度"：长按随按压力度增长，切换 Tab 时也随拖动幅度轻微流动
-                        // （量化到 0.1 步进，降低 shader 参数抖动与重建）
-                        val thickness = quantize(
-                            1f +
-                                THICKNESS_GAIN_PRESS * press +
-                                THICKNESS_GAIN_FLOW * flow * maxOf(press, FLOW_BASELINE)
-                        )
+                        // 玻璃"厚度"只驱动 lens 折射（仅更新 shader uniform）：
+                        // 模糊半径保持常量，拖动过程中不再重建 RenderEffect 链，更顺滑也更省电
+                        val thickness = 1f +
+                            THICKNESS_GAIN_PRESS * press +
+                            THICKNESS_GAIN_FLOW * flow * maxOf(press, FLOW_BASELINE)
                         padding = maxOf(padding, 40.dp.toPx())
                         vibrancy()
-                        blur(4.dp.toPx() * thickness, 4.dp.toPx() * thickness)
+                        blur(BLUR_RADIUS_DP.dp.toPx(), BLUR_RADIUS_DP.dp.toPx())
                         lens(
                             refractionHeight = 24.dp.toPx() * thickness,
                             refractionAmount = 24.dp.toPx() * thickness
@@ -719,9 +752,6 @@ private fun BackdropEffectScope.lens(
         }
     }
 }
-
-/** 量化到 0.1 步进：减少每帧 shader 参数抖动与模糊链重建，兼顾流畅与功耗。 */
-private fun quantize(value: Float): Float = (value * 10f).roundToInt() / 10f
 
 private fun BackdropEffectScope.roundedRectCornerRadii(): FloatArray? {
     val cornerShape = shape as? CornerBasedShape ?: return null

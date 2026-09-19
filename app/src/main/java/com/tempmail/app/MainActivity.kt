@@ -156,7 +156,8 @@ private data class Strings(
     val cancel: String, val rawData: String,
     val authorHomepage: String, val projectRepo: String,
     val themeStyle: String, val themeDefault: String, val themeHyperOS: String,
-    val barStyle: String, val barStyleFloat: String, val barStyleGlass: String
+    val barStyle: String, val barStyleFloat: String, val barStyleGlass: String,
+    val glassHint: String
 )
 
 private fun strings(lang: String): Strings = when (lang) {
@@ -185,7 +186,7 @@ private fun strings(lang: String): Strings = when (lang) {
         cancel = "Cancel", rawData = "Raw data:",
         authorHomepage = "Author Homepage", projectRepo = "Project Repository",
         themeStyle = "Theme", themeDefault = "Material3", themeHyperOS = "Miuix",
-        barStyle = "Bottom Bar", barStyleFloat = "Floating", barStyleGlass = "Liquid Glass"
+        barStyle = "Bottom Bar", barStyleFloat = "Floating", barStyleGlass = "Liquid Glass", glassHint = "Long-press the bar and drag to switch tabs"
     )
     "ja" -> Strings(
         title = "一時メール",
@@ -212,7 +213,7 @@ private fun strings(lang: String): Strings = when (lang) {
         cancel = "キャンセル", rawData = "生データ:",
         authorHomepage = "作者ホームページ", projectRepo = "プロジェクトリポジトリ",
         themeStyle = "テーマ", themeDefault = "Material3", themeHyperOS = "Miuix",
-        barStyle = "ボトムバー", barStyleFloat = "フローティング", barStyleGlass = "Liquid Glass"
+        barStyle = "ボトムバー", barStyleFloat = "フローティング", barStyleGlass = "Liquid Glass", glassHint = "バーを長押ししてドラッグでタブを切り替え"
     )
     "ko" -> Strings(
         title = "임시 메일",
@@ -239,7 +240,7 @@ private fun strings(lang: String): Strings = when (lang) {
         cancel = "취소", rawData = "원본 데이터:",
         authorHomepage = "작성자 홈페이지", projectRepo = "프로젝트 저장소",
         themeStyle = "테마", themeDefault = "Material3", themeHyperOS = "Miuix",
-        barStyle = "하단 바", barStyleFloat = "플로팅", barStyleGlass = "Liquid Glass"
+        barStyle = "하단 바", barStyleFloat = "플로팅", barStyleGlass = "Liquid Glass", glassHint = "하단 바를 길게 누른 뒤 드래그해 탭 전환"
     )
     "fr" -> Strings(
         title = "Temp Mail",
@@ -266,7 +267,7 @@ private fun strings(lang: String): Strings = when (lang) {
         cancel = "Annuler", rawData = "Données brutes :",
         authorHomepage = "Page de l'auteur", projectRepo = "Dépôt du projet",
         themeStyle = "Thème", themeDefault = "Material3", themeHyperOS = "Miuix",
-        barStyle = "Barre inférieure", barStyleFloat = "Flottant", barStyleGlass = "Liquid Glass"
+        barStyle = "Barre inférieure", barStyleFloat = "Flottant", barStyleGlass = "Liquid Glass", glassHint = "Appuyez longuement sur la barre et faites glisser pour changer d'onglet"
     )
     "de" -> Strings(
         title = "Temp Mail",
@@ -293,7 +294,7 @@ private fun strings(lang: String): Strings = when (lang) {
         cancel = "Abbrechen", rawData = "Rohdaten:",
         authorHomepage = "Autorenseite", projectRepo = "Projekt-Repository",
         themeStyle = "Design", themeDefault = "Material3", themeHyperOS = "Miuix",
-        barStyle = "Navigationsleiste", barStyleFloat = "Schwebend", barStyleGlass = "Liquid Glass"
+        barStyle = "Navigationsleiste", barStyleFloat = "Schwebend", barStyleGlass = "Liquid Glass", glassHint = "Leiste lange drücken und ziehen, um Tabs zu wechseln"
     )
     "es" -> Strings(
         title = "Correo Temporal",
@@ -320,7 +321,7 @@ private fun strings(lang: String): Strings = when (lang) {
         cancel = "Cancelar", rawData = "Datos sin procesar:",
         authorHomepage = "Página del autor", projectRepo = "Repositorio del proyecto",
         themeStyle = "Tema", themeDefault = "Material3", themeHyperOS = "Miuix",
-        barStyle = "Barra inferior", barStyleFloat = "Flotante", barStyleGlass = "Liquid Glass"
+        barStyle = "Barra inferior", barStyleFloat = "Flotante", barStyleGlass = "Liquid Glass", glassHint = "Mantén pulsada la barra y arrastra para cambiar de pestaña"
     )
     "pt" -> Strings(
         title = "Email Temporário",
@@ -347,7 +348,7 @@ private fun strings(lang: String): Strings = when (lang) {
         cancel = "Cancelar", rawData = "Dados brutos:",
         authorHomepage = "Página do autor", projectRepo = "Repositório do projeto",
         themeStyle = "Tema", themeDefault = "Material3", themeHyperOS = "Miuix",
-        barStyle = "Barra inferior", barStyleFloat = "Flutuante", barStyleGlass = "Liquid Glass"
+        barStyle = "Barra inferior", barStyleFloat = "Flutuante", barStyleGlass = "Liquid Glass", glassHint = "Pressione e arraste a barra para trocar de aba"
     )
     "ru" -> Strings(
         title = "Временная почта",
@@ -374,7 +375,7 @@ private fun strings(lang: String): Strings = when (lang) {
         cancel = "Отмена", rawData = "Исходные данные:",
         authorHomepage = "Страница автора", projectRepo = "Репозиторий проекта",
         themeStyle = "Тема", themeDefault = "Material3", themeHyperOS = "Miuix",
-        barStyle = "Нижняя панель", barStyleFloat = "Плавающая", barStyleGlass = "Liquid Glass"
+        barStyle = "Нижняя панель", barStyleFloat = "Плавающая", barStyleGlass = "Liquid Glass", glassHint = "Зажмите панель и потяните, чтобы переключить вкладку"
     )
     "it" -> Strings(
         title = "Email Temporanea",
@@ -401,7 +402,7 @@ private fun strings(lang: String): Strings = when (lang) {
         cancel = "Annulla", rawData = "Dati grezzi:",
         authorHomepage = "Pagina dell'autore", projectRepo = "Repository del progetto",
         themeStyle = "Tema", themeDefault = "Material3", themeHyperOS = "Miuix",
-        barStyle = "Barra inferiore", barStyleFloat = "Fluttuante", barStyleGlass = "Liquid Glass"
+        barStyle = "Barra inferiore", barStyleFloat = "Fluttuante", barStyleGlass = "Liquid Glass", glassHint = "Tieni premuta la barra e trascina per cambiare scheda"
     )
     "ar" -> Strings(
         title = "بريد مؤقت",
@@ -428,7 +429,7 @@ private fun strings(lang: String): Strings = when (lang) {
         cancel = "إلغاء", rawData = "البيانات الخام:",
         authorHomepage = "صفحة المؤلف", projectRepo = "مستودع المشروع",
         themeStyle = "السمة", themeDefault = "Material3", themeHyperOS = "Miuix",
-        barStyle = "الشريط السفلي", barStyleFloat = "عائم", barStyleGlass = "Liquid Glass"
+        barStyle = "الشريط السفلي", barStyleFloat = "عائم", barStyleGlass = "Liquid Glass", glassHint = "اضغط مطولًا على الشريط واسحب لتبديل التبويب"
     )
     "hi" -> Strings(
         title = "अस्थायी मेल",
@@ -455,7 +456,7 @@ private fun strings(lang: String): Strings = when (lang) {
         cancel = "रद्द करें", rawData = "कच्चा डेटा:",
         authorHomepage = "लेखक का पेज", projectRepo = "प्रोजेक्ट रिपॉज़िटरी",
         themeStyle = "थीम", themeDefault = "Material3", themeHyperOS = "Miuix",
-        barStyle = "निचला बार", barStyleFloat = "फ़्लोटिंग", barStyleGlass = "Liquid Glass"
+        barStyle = "निचला बार", barStyleFloat = "फ़्लोटिंग", barStyleGlass = "Liquid Glass", glassHint = "बार को देर तक दबाकर खींचें और टैब बदलें"
     )
     "vi" -> Strings(
         title = "Mail Tạm Thời",
@@ -482,7 +483,7 @@ private fun strings(lang: String): Strings = when (lang) {
         cancel = "Hủy", rawData = "Dữ liệu thô:",
         authorHomepage = "Trang tác giả", projectRepo = "Kho dự án",
         themeStyle = "Chủ đề", themeDefault = "Material3", themeHyperOS = "Miuix",
-        barStyle = "Thanh dưới", barStyleFloat = "Nổi", barStyleGlass = "Liquid Glass"
+        barStyle = "Thanh dưới", barStyleFloat = "Nổi", barStyleGlass = "Liquid Glass", glassHint = "Nhấn giữ thanh và kéo để chuyển tab"
     )
     "th" -> Strings(
         title = "อีเมลชั่วคราว",
@@ -509,7 +510,7 @@ private fun strings(lang: String): Strings = when (lang) {
         cancel = "ยกเลิก", rawData = "ข้อมูลดิบ:",
         authorHomepage = "หน้าผู้เขียน", projectRepo = "ที่เก็บโปรเจ็กต์",
         themeStyle = "ธีม", themeDefault = "Material3", themeHyperOS = "Miuix",
-        barStyle = "แถบล่าง", barStyleFloat = "ลอย", barStyleGlass = "Liquid Glass"
+        barStyle = "แถบล่าง", barStyleFloat = "ลอย", barStyleGlass = "Liquid Glass", glassHint = "กดแถบค้างแล้วลากเพื่อสลับแท็บ"
     )
     "id" -> Strings(
         title = "Email Sementara",
@@ -536,7 +537,7 @@ private fun strings(lang: String): Strings = when (lang) {
         cancel = "Batal", rawData = "Data mentah:",
         authorHomepage = "Halaman Penulis", projectRepo = "Repositori Proyek",
         themeStyle = "Tema", themeDefault = "Material3", themeHyperOS = "Miuix",
-        barStyle = "Bilah bawah", barStyleFloat = "Mengambang", barStyleGlass = "Liquid Glass"
+        barStyle = "Bilah bawah", barStyleFloat = "Mengambang", barStyleGlass = "Liquid Glass", glassHint = "Tekan lama bilah lalu geser untuk berpindah tab"
     )
     else -> Strings(
         title = "临时邮箱",
@@ -563,7 +564,7 @@ private fun strings(lang: String): Strings = when (lang) {
         cancel = "取消", rawData = "原始数据:",
         authorHomepage = "作者主页", projectRepo = "项目仓库",
         themeStyle = "主题风格", themeDefault = "Material3", themeHyperOS = "Miuix",
-        barStyle = "底栏风格", barStyleFloat = "悬浮", barStyleGlass = "Liquid Glass"
+        barStyle = "底栏风格", barStyleFloat = "悬浮", barStyleGlass = "Liquid Glass", glassHint = "长按底栏可左右拖动切换标签"
     )
 }
 
@@ -923,6 +924,13 @@ class MainActivity : ComponentActivity() {
                     state.barStyle == BarStyle.LiquidGlass &&
                     !showDisclaimer && isGlassBlurSupported()
                 val glassOverlap = if (glassActive) GlassBarSpace else 0.dp
+                // 一次性提示：首次启用液态玻璃底栏时告知"长按可拖动切换"
+                LaunchedEffect(glassActive) {
+                    if (glassActive && !prefs.getBoolean("glass_hint_shown", false)) {
+                        prefs.edit().putBoolean("glass_hint_shown", true).apply()
+                        snackbar.showSnackbar(s.glassHint)
+                    }
+                }
                 val disclaimerPage: @Composable (Modifier) -> Unit = { pageModifier ->
                     Column(
                         pageModifier.verticalScroll(rememberScrollState()),
