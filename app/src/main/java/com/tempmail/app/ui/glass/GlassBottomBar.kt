@@ -107,6 +107,25 @@ import kotlin.math.sin
 
 private val GlassBarShape = RoundedCornerShape(28.dp)
 
+// ==================== 玻璃手感参数（更黏更弹） ====================
+// 集中在此处便于调参：数值越大越"液态"，越小越克制。
+
+/** 长按进入液态交互态的阈值（ms）：未达阈值即松手则玻璃不形变。 */
+private const val HOLD_DELAY_MILLIS = 150L
+
+/** 松手时的惯性预测时长（s）：越大越"滑"，快速甩动更易吸附到相邻 Tab。 */
+private const val INERTIA_PREDICT_SECONDS = 0.22f
+
+/** 按压力度带来的玻璃厚度增益（模糊/折射强度 = 1 + 增益×进度）。 */
+private const val THICKNESS_GAIN_PRESS = 0.8f
+
+/** 拖动幅度（处于两 Tab 之间）带来的额外厚度增益，乘以按压力度。 */
+private const val THICKNESS_GAIN_FLOW = 0.7f
+
+/** 速度 → 沿运动方向拉伸的系数与上限。 */
+private const val STRETCH_GAIN = 0.06f
+private const val STRETCH_LIMIT = 0.12f
+
 /** 底栏高度 + 底部外边距：页面滚动内容需在末尾预留的额外空间（可滚到底栏下方）。 */
 val GlassBarSpace = 88.dp
 
@@ -251,13 +270,14 @@ private fun GlassBar(
             visibilityThreshold = 0.001f,
             initialScale = 1f,
             pressedScale = 78f / 56f,
+            holdDelayMillis = HOLD_DELAY_MILLIS,
             canDrag = { offset -> offset.x in 0f..totalWidthPx },
             onDragStarted = { position -> updateValue(indexAt(position.x).toFloat()) },
             onDragStopped = {
-                // 惯性吸附：位置 + 速度预测（约 150ms 的甩动行程），
+                // 惯性吸附：位置 + 速度预测（INERTIA_PREDICT_SECONDS 的甩动行程），
                 // 快速甩动即使未越过中点也能吸附到相邻 Tab，慢速拖动则按位置就近吸附
                 val span = (tabsCount - 1).toFloat().coerceAtLeast(1e-6f)
-                val predicted = targetValue + velocity * span * 0.15f
+                val predicted = targetValue + velocity * span * INERTIA_PREDICT_SECONDS
                 val targetIndex = predicted.roundToInt().coerceIn(0, tabsCount - 1)
                 if (currentIndex != targetIndex) {
                     currentIndex = targetIndex
@@ -348,7 +368,9 @@ private fun GlassBar(
                         val press = dampedDragAnimation.pressProgress
                         val flow = dampedDragAnimation.dragFlow
                         // 玻璃"厚度"随长按与拖动幅度增长（量化到 0.1 步进，降低 shader 参数抖动与重建）
-                        val thickness = quantize(1f + 0.6f * press + 0.5f * flow * press)
+                        val thickness = quantize(
+                            1f + THICKNESS_GAIN_PRESS * press + THICKNESS_GAIN_FLOW * flow * press
+                        )
                         padding = maxOf(padding, 40.dp.toPx())
                         vibrancy()
                         blur(4.dp.toPx() * thickness, 4.dp.toPx() * thickness)
@@ -364,8 +386,8 @@ private fun GlassBar(
                         val bulge = lerp(1f, 1f + 16.dp.toPx() / width, press)
                         // 速度方向拉伸 + 拖动幅度延展：玻璃随运动方向轻微流动
                         val flow = dampedDragAnimation.dragFlow
-                        val stretch = (dampedDragAnimation.velocity * 0.06f)
-                            .fastCoerceIn(-0.08f, 0.08f) * press
+                        val stretch = (dampedDragAnimation.velocity * STRETCH_GAIN)
+                            .fastCoerceIn(-STRETCH_LIMIT, STRETCH_LIMIT) * press
                         scaleX = bulge * (1f + stretch + 0.02f * flow * press)
                         scaleY = bulge
                     },
