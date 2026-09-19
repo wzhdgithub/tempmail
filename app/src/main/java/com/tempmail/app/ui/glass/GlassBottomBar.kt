@@ -1,5 +1,6 @@
 package com.tempmail.app.ui.glass
 
+import android.annotation.SuppressLint
 import android.os.Build
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.EaseOut
@@ -122,6 +123,9 @@ private const val THICKNESS_GAIN_PRESS = 0.8f
 /** 拖动幅度（处于两 Tab 之间）带来的额外厚度增益，乘以按压力度。 */
 private const val THICKNESS_GAIN_FLOW = 0.7f
 
+/** 未长按时，拖动幅度仍按该基准参与厚度计算：让普通切换 Tab 也有轻微玻璃流动。 */
+private const val FLOW_BASELINE = 0.35f
+
 /** 速度 → 沿运动方向拉伸的系数与上限。 */
 private const val STRETCH_GAIN = 0.06f
 private const val STRETCH_LIMIT = 0.12f
@@ -130,11 +134,30 @@ private const val STRETCH_LIMIT = 0.12f
 val GlassBarSpace = 88.dp
 
 /**
- * 真实模糊需要 API 33+ 的 RuntimeShader，且设备需实际支持 AGSL。
+ * 真实模糊依赖 API 33+ 的 RuntimeShader（AGSL），且设备需真的能编译着色器。
  * 任一条件不满足时回退到伪玻璃底栏（渐变 + 描边），避免出现"透明但无模糊"的半成品观感。
  */
 fun isGlassBlurSupported(): Boolean =
-    Build.VERSION.SDK_INT >= 33 && isRuntimeShaderSupported()
+    Build.VERSION.SDK_INT >= 33 && isRuntimeShaderSupported() && isAgsuUsable()
+
+/**
+ * 探测 AGSL 是否可用：个别设备/驱动在 API 33+ 上仍会编译失败。
+ * 失败时 miuix 的模糊/折射/高光会全部静默失效，故这里提前判定并降级。
+ * 只在 API 33+ 调用（由 isGlassBlurSupported 短路保证），因此抑制 NewApi 检查。
+ */
+@SuppressLint("NewApi")
+private fun probeAgsu(): Boolean = try {
+    android.graphics.RuntimeShader(AGSL_PROBE)
+    true
+} catch (_: Throwable) {
+    false
+}
+
+private val agslUsable: Boolean by lazy { probeAgsu() }
+
+private fun isAgsuUsable(): Boolean = agslUsable
+
+private const val AGSL_PROBE = "half4 main(float2 c) { return half4(c.x, c.y, 0.0, 1.0); }"
 
 data class GlassBarItem(val icon: ImageVector, val label: String)
 
@@ -371,9 +394,12 @@ private fun GlassBar(
                         // 以下动画值均在 draw 阶段读取：只触发重绘、不触发重组
                         val press = dampedDragAnimation.pressProgress
                         val flow = dampedDragAnimation.dragFlow
-                        // 玻璃"厚度"随长按与拖动幅度增长（量化到 0.1 步进，降低 shader 参数抖动与重建）
+                        // 玻璃"厚度"：长按随按压力度增长，切换 Tab 时也随拖动幅度轻微流动
+                        // （量化到 0.1 步进，降低 shader 参数抖动与重建）
                         val thickness = quantize(
-                            1f + THICKNESS_GAIN_PRESS * press + THICKNESS_GAIN_FLOW * flow * press
+                            1f +
+                                THICKNESS_GAIN_PRESS * press +
+                                THICKNESS_GAIN_FLOW * flow * maxOf(press, FLOW_BASELINE)
                         )
                         padding = maxOf(padding, 40.dp.toPx())
                         vibrancy()
@@ -474,13 +500,14 @@ private fun GlassBar(
                         backdrop = combinedBackdrop,
                         shape = { pillShape },
                         effects = {
-                            // 按压进度驱动透镜强度：按下时放大折射并带色散；
-                            // 拖动幅度越大折射越强，玻璃在 Tab 之间被"拉长"
+                            // 切换 Tab 的过程中也带玻璃流动（无需长按）：胶囊在 Tab 之间时折射显现，
+                            // 停稳后自动归零；长按时以按压力度为主，叠加更强的放大与色散
                             val progress = dampedDragAnimation.pressProgress
                             val flow = dampedDragAnimation.dragFlow
+                            val strength = maxOf(progress, flow * 0.45f)
                             lens(
-                                refractionHeight = 10.dp.toPx() * progress,
-                                refractionAmount = 14.dp.toPx() * progress * (1f + 0.5f * flow),
+                                refractionHeight = 10.dp.toPx() * strength,
+                                refractionAmount = 14.dp.toPx() * strength * (1f + 0.5f * flow),
                                 depthEffect = true,
                                 chromaticAberration = 0.5f
                             )
