@@ -124,17 +124,17 @@ private val GlassBarShape = RoundedCornerShape(28.dp)
 private const val INERTIA_PREDICT_SECONDS = 0.22f
 
 /** 按压力度带来的玻璃厚度增益（模糊/折射强度 = 1 + 增益×进度）。 */
-private const val THICKNESS_GAIN_PRESS = 0.8f
+private const val THICKNESS_GAIN_PRESS = 0.6f
 
-/** 拖动幅度（处于两 Tab 之间）带来的额外厚度增益，乘以按压力度。 */
-private const val THICKNESS_GAIN_FLOW = 0.7f
+/** 拖动幅度（处于两 Tab 之间）带来的额外厚度增益（刻意压低：拖动时底栏本体只微动）。 */
+private const val THICKNESS_GAIN_FLOW = 0.35f
 
-/** 未长按时，拖动幅度仍按该基准参与厚度计算：让普通切换 Tab 也有轻微玻璃流动。 */
-private const val FLOW_BASELINE = 0.35f
+/** 未按下时，拖动幅度仍按该基准参与厚度计算（数值越小底栏本体越稳定）。 */
+private const val FLOW_BASELINE = 0.15f
 
-/** 速度 → 沿运动方向拉伸的系数与上限。 */
-private const val STRETCH_GAIN = 0.06f
-private const val STRETCH_LIMIT = 0.12f
+/** 速度 → 沿运动方向拉伸的系数与上限（拖动时底栏只做很轻的形变）。 */
+private const val STRETCH_GAIN = 0.02f
+private const val STRETCH_LIMIT = 0.035f
 
 /** 玻璃模糊半径（常量）：拖动过程中不改变，避免反复重建 RenderEffect 链。 */
 private const val BLUR_RADIUS_DP = 4f
@@ -431,7 +431,7 @@ private fun GlassBar(
                     layerBlock = {
                         val press = dampedDragAnimation.pressProgress
                         val width = size.width.coerceAtLeast(1f)
-                        val bulge = lerp(1f, 1f + 16.dp.toPx() / width, press)
+                        val bulge = lerp(1f, 1f + 10.dp.toPx() / width, press)
                         // 速度方向拉伸 + 拖动幅度延展：玻璃随运动方向轻微流动
                         val flow = dampedDragAnimation.dragFlow
                         val stretch = (dampedDragAnimation.velocity * STRETCH_GAIN)

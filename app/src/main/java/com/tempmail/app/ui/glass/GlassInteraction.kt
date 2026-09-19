@@ -131,7 +131,7 @@ class DampedDragAnimation(
 
     private val valueAnimationSpec = spring(1f, 1000f, visibilityThreshold)
     private val velocityAnimationSpec = spring(0.5f, 300f, visibilityThreshold * 10f)
-    private val pressProgressAnimationSpec = spring(1f, 1000f, 0.001f)
+    private val pressProgressAnimationSpec = spring(0.85f, 900f, 0.001f)
     private val scaleXAnimationSpec = spring(0.6f, 250f, 0.001f)
     private val scaleYAnimationSpec = spring(0.7f, 250f, 0.001f)
 
@@ -198,12 +198,10 @@ class DampedDragAnimation(
         pressJob?.cancel()
         velocityTracker.resetTracking()
         pressJob = animationScope.launch {
-            // 按下即用最大强度：直接吸附到满形变，不做渐入。
-            // 原因：部分 ROM（如 ColorOS）会取消"静止按住"手势，渐入会来不及呈现；
-            // 松手仍走弹簧回弹，保证恢复过程自然。
-            pressProgressAnimation.snapTo(1f)
-            scaleXAnimation.snapTo(pressedScale)
-            scaleYAnimation.snapTo(pressedScale)
+            // 形变带过渡：放大镜在约 200ms 内弹入（不做瞬发）；松手仍走弹簧回弹
+            launch { pressProgressAnimation.animateTo(1f, pressProgressAnimationSpec) }
+            launch { scaleXAnimation.animateTo(pressedScale, scaleXAnimationSpec) }
+            launch { scaleYAnimation.animateTo(pressedScale, scaleYAnimationSpec) }
         }
     }
 
