@@ -254,7 +254,11 @@ private fun GlassBar(
             canDrag = { offset -> offset.x in 0f..totalWidthPx },
             onDragStarted = { position -> updateValue(indexAt(position.x).toFloat()) },
             onDragStopped = {
-                val targetIndex = targetValue.roundToInt().coerceIn(0, tabsCount - 1)
+                // 惯性吸附：位置 + 速度预测（约 150ms 的甩动行程），
+                // 快速甩动即使未越过中点也能吸附到相邻 Tab，慢速拖动则按位置就近吸附
+                val span = (tabsCount - 1).toFloat().coerceAtLeast(1e-6f)
+                val predicted = targetValue + velocity * span * 0.15f
+                val targetIndex = predicted.roundToInt().coerceIn(0, tabsCount - 1)
                 if (currentIndex != targetIndex) {
                     currentIndex = targetIndex
                     onSelectedUpdated(targetIndex)
@@ -340,21 +344,30 @@ private fun GlassBar(
                     backdrop = backdrop,
                     shape = { glassShape },
                     effects = {
+                        // 以下动画值均在 draw 阶段读取：只触发重绘、不触发重组
+                        val press = dampedDragAnimation.pressProgress
+                        val flow = dampedDragAnimation.dragFlow
+                        // 玻璃"厚度"随长按与拖动幅度增长（量化到 0.1 步进，降低 shader 参数抖动与重建）
+                        val thickness = quantize(1f + 0.6f * press + 0.5f * flow * press)
                         padding = maxOf(padding, 40.dp.toPx())
                         vibrancy()
-                        blur(4.dp.toPx(), 4.dp.toPx())
+                        blur(4.dp.toPx() * thickness, 4.dp.toPx() * thickness)
                         lens(
-                            refractionHeight = 24.dp.toPx(),
-                            refractionAmount = 24.dp.toPx()
+                            refractionHeight = 24.dp.toPx() * thickness,
+                            refractionAmount = 24.dp.toPx() * thickness
                         )
                     },
                     highlight = { baseHighlight.value.copy(alpha = 0.75f) },
                     layerBlock = {
-                        // 按压时玻璃本体微微鼓起
+                        val press = dampedDragAnimation.pressProgress
                         val width = size.width.coerceAtLeast(1f)
-                        val s = lerp(1f, 1f + 16.dp.toPx() / width, dampedDragAnimation.pressProgress)
-                        scaleX = s
-                        scaleY = s
+                        val bulge = lerp(1f, 1f + 16.dp.toPx() / width, press)
+                        // 速度方向拉伸 + 拖动幅度延展：玻璃随运动方向轻微流动
+                        val flow = dampedDragAnimation.dragFlow
+                        val stretch = (dampedDragAnimation.velocity * 0.06f)
+                            .fastCoerceIn(-0.08f, 0.08f) * press
+                        scaleX = bulge * (1f + stretch + 0.02f * flow * press)
+                        scaleY = bulge
                     },
                     onDrawSurface = { drawRect(containerColor) }
                 )
@@ -435,11 +448,13 @@ private fun GlassBar(
                         backdrop = combinedBackdrop,
                         shape = { pillShape },
                         effects = {
-                            // 按压进度驱动透镜强度：按下时放大折射并带色散
+                            // 按压进度驱动透镜强度：按下时放大折射并带色散；
+                            // 拖动幅度越大折射越强，玻璃在 Tab 之间被"拉长"
                             val progress = dampedDragAnimation.pressProgress
+                            val flow = dampedDragAnimation.dragFlow
                             lens(
                                 refractionHeight = 10.dp.toPx() * progress,
-                                refractionAmount = 14.dp.toPx() * progress,
+                                refractionAmount = 14.dp.toPx() * progress * (1f + 0.5f * flow),
                                 depthEffect = true,
                                 chromaticAberration = 0.5f
                             )
@@ -651,6 +666,9 @@ private fun BackdropEffectScope.lens(
         }
     }
 }
+
+/** 量化到 0.1 步进：减少每帧 shader 参数抖动与模糊链重建，兼顾流畅与功耗。 */
+private fun quantize(value: Float): Float = (value * 10f).roundToInt() / 10f
 
 private fun BackdropEffectScope.roundedRectCornerRadii(): FloatArray? {
     val cornerShape = shape as? CornerBasedShape ?: return null

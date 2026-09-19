@@ -38,9 +38,11 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.android.awaitFrame
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlin.math.abs
+import kotlin.math.roundToInt
 import kotlin.time.TimeSource
 
 /**
@@ -121,6 +123,8 @@ class DampedDragAnimation(
     val visibilityThreshold: Float,
     val initialScale: Float,
     val pressedScale: Float,
+    /** 长按阈值：按住超过该时长才进入液态形变状态（未达阈值即松手则不形变）。 */
+    val holdDelayMillis: Long = 200L,
     val canDrag: (Offset) -> Boolean = { true },
     val onDragStarted: DampedDragAnimation.(position: Offset) -> Unit,
     val onDragStopped: DampedDragAnimation.() -> Unit,
@@ -155,6 +159,16 @@ class DampedDragAnimation(
     val scaleY: Float get() = scaleYAnimation.value
     val velocity: Float get() = velocityAnimation.value
 
+    /**
+     * 拖动形变量（0=恰好停在某个 Tab 中心，1=正处于两个 Tab 之间）：
+     * 直接由动画中的 value 推导，故松手吸附时随位置自然回落，无需额外动画与状态。
+     */
+    val dragFlow: Float
+        get() {
+            val v = valueAnimation.value
+            return (abs(v - v.roundToInt()) * 2f).coerceIn(0f, 1f)
+        }
+
     val modifier: Modifier = Modifier.pointerInput(Unit) {
         inspectDragGestures(
             onDragStart = { down ->
@@ -187,6 +201,8 @@ class DampedDragAnimation(
         pressJob?.cancel()
         velocityTracker.resetTracking()
         pressJob = animationScope.launch {
+            // 长按阈值：先等待再进入形变，避免轻触/快速滑动时玻璃"液化"
+            delay(holdDelayMillis)
             launch { pressProgressAnimation.animateTo(1f, pressProgressAnimationSpec) }
             launch { scaleXAnimation.animateTo(pressedScale, scaleXAnimationSpec) }
             launch { scaleYAnimation.animateTo(pressedScale, scaleYAnimationSpec) }
@@ -194,6 +210,8 @@ class DampedDragAnimation(
     }
 
     fun release() {
+        // 未达长按阈值就松手：取消待触发的形变，玻璃保持原样
+        pressJob?.cancel()
         releaseJob?.cancel()
         releaseJob = animationScope.launch {
             awaitFrame()
