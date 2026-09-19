@@ -74,8 +74,13 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
+import com.tempmail.app.ui.glass.GlassBarItem
+import com.tempmail.app.ui.glass.GlassBarSpace
+import com.tempmail.app.ui.glass.GlassShell
+import com.tempmail.app.ui.glass.isGlassBlurSupported
 import com.tempmail.app.ui.theme.TempMailTheme
 import com.tempmail.app.ui.theme.ThemeStyle
 import com.tempmail.app.ui.theme.themedCornerShape
@@ -892,6 +897,13 @@ class MainActivity : ComponentActivity() {
                         Tab.Settings -> s.settings
                     }
                 }
+                // 真·液态玻璃：HyperOS 主题 + 液态玻璃底栏 + API 33+（RuntimeShader）时启用，
+                // 内容铺满整屏并挂 backdrop 图层，底栏浮于其上做真实模糊/折射；否则走原有布局。
+                // glassOverlap 为页面滚动内容末尾需预留的底栏高度，避免最后一项被底栏遮挡。
+                val glassActive = state.themeStyle == ThemeStyle.HyperOS &&
+                    state.barStyle == BarStyle.LiquidGlass &&
+                    !showDisclaimer && isGlassBlurSupported()
+                val glassOverlap = if (glassActive) GlassBarSpace else 0.dp
                 val disclaimerPage: @Composable (Modifier) -> Unit = { pageModifier ->
                     Column(
                         pageModifier.verticalScroll(rememberScrollState()),
@@ -958,10 +970,10 @@ class MainActivity : ComponentActivity() {
                         label = "tabContent"
                     ) { tab ->
                         when (tab) {
-                            Tab.Inbox -> InboxTab(contentPadding, state, snackbar, scope, context, s, client, poem, ::doRefresh) { updater ->
+                            Tab.Inbox -> InboxTab(contentPadding, glassOverlap, state, snackbar, scope, context, s, client, poem, ::doRefresh) { updater ->
                                 state = updater(state)
                             }
-                            Tab.History -> HistoryTab(contentPadding, state, s) { email ->
+                            Tab.History -> HistoryTab(contentPadding, glassOverlap, state, s) { email ->
                                 val newHistory = if (state.email.isNotBlank() && state.email != email)
                                     state.history + HistoryEmail(state.email, false)
                                 else state.history
@@ -974,7 +986,7 @@ class MainActivity : ComponentActivity() {
                                     history = filteredHistory
                                 )
                             }
-                            Tab.Settings -> SettingsTab(contentPadding, state, s, snackbar, scope, client, onCheckUpdate = { manual -> checkUpdate(manual) }) { newState ->
+                            Tab.Settings -> SettingsTab(contentPadding, glassOverlap, state, s, snackbar, scope, client, onCheckUpdate = { manual -> checkUpdate(manual) }) { newState ->
                                 if (newState.language != state.language) {
                                     prefs.edit().putString("language", newState.language).apply()
                                 }
@@ -996,9 +1008,16 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
-                Scaffold(
+                // 真·液态玻璃：HyperOS 主题 + 液态玻璃底栏 + API 33+（RuntimeShader）时启用，
+                // 内容铺满整屏并挂 backdrop 图层，底栏浮于其上做真实模糊/折射；否则走原有布局
+                GlassShell(
+                    glass = glassActive,
+                    darkTheme = state.isDarkMode,
+                    items = Tab.entries.map { GlassBarItem(it.icon, tabLabel(it)) },
+                    selectedIndex = Tab.entries.indexOf(state.currentTab),
+                    onSelect = { state = state.copy(currentTab = Tab.entries[it]) },
                     snackbarHost = { SnackbarHost(snackbar) },
-                    bottomBar = {
+                    fallbackBar = {
                         if (!showDisclaimer) {
                             if (state.themeStyle == ThemeStyle.Material3) {
                                 // Material3：原始默认样式（与底栏定制前完全一致）
@@ -1150,12 +1169,12 @@ private fun MiuixFloatingBottomBar(
 }
 
 /**
- * 液态玻璃底栏：视觉与交互规格参考 skill-liquid-glass
- * （玻璃本体 + 高光描边 + 外层柔和阴影 + 滑动指示器 + 按压缩放回弹），
- * 以本项目现有 Compose 栈实现，不引入任何新依赖。
+ * 液态玻璃底栏（伪玻璃回退实现，用于 API 33 以下或模糊不可用的设备）：
+ * 视觉与交互规格参考 skill-liquid-glass
+ * （玻璃本体 + 高光描边 + 外层柔和阴影 + 滑动指示器 + 按压缩放回弹）。
  *
- * 注：该 skill 的「模糊 / 折射」依赖 Compose 1.7+ 的图层捕获与 API 33 的 RuntimeShader，
- * 在本项目 Compose 1.5.4 + minSdk 24 的约束下无法承载，故此处实现其可移植的玻璃质感层次。
+ * 注：真实模糊/折射由 ui/glass/GlassBottomBar.kt 在 API 33+ 提供；
+ * 本组件仅以渐变 + 描边 + 阴影模拟玻璃质感，保证低版本观感一致性与稳定性。
  */
 @SuppressLint("UnusedBoxWithConstraintsScope")
 @Composable
@@ -1297,6 +1316,7 @@ private fun GlassTabItem(
 @Composable
 private fun InboxTab(
     p: PaddingValues,
+    bottomOverlap: Dp,
     state: AppState,
     snackbar: SnackbarHostState,
     scope: kotlinx.coroutines.CoroutineScope,
@@ -1626,12 +1646,15 @@ private fun InboxTab(
                 }
             }
         )
+        // 玻璃底栏：内容可滚到浮起的底栏下方，末尾预留底栏高度使最后一项仍可完整显示
+        if (bottomOverlap > 0.dp) Spacer(Modifier.height(bottomOverlap))
     }
 }
 
 @Composable
 private fun HistoryTab(
     p: PaddingValues,
+    bottomOverlap: Dp,
     state: AppState,
     s: Strings,
     onUseEmail: (String) -> Unit = {}
@@ -1703,6 +1726,8 @@ private fun HistoryTab(
                 }
             }
         }
+        // 玻璃底栏：内容可滚到浮起的底栏下方，末尾预留底栏高度使最后一项仍可完整显示
+        if (bottomOverlap > 0.dp) Spacer(Modifier.height(bottomOverlap))
     }
 }
 
@@ -1711,6 +1736,7 @@ private enum class SettingsPage { Main, Language, DarkMode, Theme, BarStyle, Abo
 @Composable
 private fun SettingsTab(
     p: PaddingValues,
+    bottomOverlap: Dp,
     state: AppState,
     s: Strings,
     snackbar: SnackbarHostState,
@@ -1956,13 +1982,15 @@ private fun SettingsTab(
                     }
                 }
             }
+            // 玻璃底栏：滚动内容末尾预留底栏高度，使其可完整滚出（底栏浮在其上）
+            if (bottomOverlap > 0.dp) Spacer(Modifier.height(bottomOverlap))
         }
         if (page == SettingsPage.Main) {
             Text("${s.version} ${com.tempmail.app.BuildConfig.VERSION_NAME}",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.align(Alignment.CenterHorizontally)
-                    .padding(bottom = 8.dp))
+                    .padding(bottom = 8.dp + bottomOverlap))
         }
     }
 }
