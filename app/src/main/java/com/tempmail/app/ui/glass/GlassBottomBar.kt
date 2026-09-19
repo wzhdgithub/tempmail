@@ -6,6 +6,8 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.EaseOut
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -54,6 +56,9 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.GraphicsLayerScope
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.changedToUpIgnoreConsumed
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.positionChangeIgnoreConsumed
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
@@ -61,11 +66,13 @@ import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.util.fastCoerceAtMost
 import androidx.compose.ui.util.fastCoerceIn
+import androidx.compose.ui.util.fastFirstOrNull
 import androidx.compose.ui.util.lerp
 import kotlinx.coroutines.launch
 import top.yukonga.miuix.kmp.blur.Backdrop
@@ -435,8 +442,6 @@ private fun GlassBar(
                     onDrawSurface = { drawRect(containerColor) }
                 )
                 .then(interactiveHighlight.modifier)
-                .then(interactiveHighlight.gestureModifier)
-                .then(dampedDragAnimation.modifier)
                 .height(64.dp)
                 .padding(4.dp),
             verticalAlignment = Alignment.CenterVertically
@@ -557,6 +562,45 @@ private fun GlassBar(
                     .width(tabWidthDp)
             )
         }
+
+        // 交互覆盖层：放在最后（命中优先级最高），自己处理按下/拖动/点击。
+        // 原实现依赖父级监听 Initial/Main pass，但在部分设备（如 API 36 的 ColorOS）上
+        // 父级收不到指针事件，导致按压缩放/拖动切换完全失效，故改为顶层覆盖层直接处理。
+        val touchSlop = with(density) { 8.dp.toPx() }
+        Box(
+            Modifier
+                .matchParentSize()
+                .pointerInput(tabsCount, isLtr) {
+                    awaitEachGesture {
+                        val down = awaitFirstDown(requireUnconsumed = false)
+                        val startPos = down.position
+                        var travelled = 0f
+                        with(dampedDragAnimation) { onDragStarted(startPos) }
+                        dampedDragAnimation.press()
+                        var lifted = false
+                        while (true) {
+                            val event = awaitPointerEvent()
+                            val change = event.changes.fastFirstOrNull { it.id == down.id } ?: break
+                            if (change.changedToUpIgnoreConsumed()) {
+                                lifted = true
+                                break
+                            }
+                            val delta = change.positionChangeIgnoreConsumed()
+                            if (delta != Offset.Zero) {
+                                travelled += delta.getDistance()
+                                with(dampedDragAnimation) { onDrag(IntSize.Zero, delta) }
+                                change.consume()
+                            }
+                        }
+                        if (lifted && travelled < touchSlop) {
+                            // 位移极小 → 视为点击
+                            activateTab(indexAt(startPos.x))
+                        }
+                        with(dampedDragAnimation) { onDragStopped() }
+                        dampedDragAnimation.release()
+                    }
+                }
+        )
     }
 }
 
