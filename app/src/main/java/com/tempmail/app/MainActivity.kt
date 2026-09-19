@@ -1118,12 +1118,6 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
-
-    private fun ColumnScope.LinearProgressIndicator(
-        progress: () -> Float,
-        modifier: Modifier
-    ) {
-    }
 }
 
 // ==================== Miuix 主题底栏（两种风格可选） ====================
@@ -1525,9 +1519,7 @@ private fun InboxTab(
                             color = MaterialTheme.colorScheme.onSurfaceVariant)
                         if (item.body.isNotBlank()) {
                             Spacer(Modifier.height(8.dp))
-                            HorizontalDivider(
-                                modifier = TODO()
-                            )
+                            HorizontalDivider()
                             Spacer(Modifier.height(8.dp))
                             Text(item.body,
                                 style = MaterialTheme.typography.bodySmall.copy(
@@ -1986,9 +1978,7 @@ private fun SettingsTab(
                                         Uri.parse("https://wzhblog6.pwapi.cn/")))
                                 })
                             Spacer(Modifier.height(12.dp))
-                            HorizontalDivider(
-                                modifier = TODO()
-                            )
+                            HorizontalDivider()
                             Spacer(Modifier.height(12.dp))
                             Text("Email", style = MaterialTheme.typography.labelLarge)
                             Spacer(Modifier.height(4.dp))
@@ -2016,11 +2006,6 @@ private fun SettingsTab(
                     .padding(bottom = 8.dp + bottomOverlap))
         }
     }
-}
-
-@Composable
-fun HorizontalDivider(modifier: Modifier) {
-    TODO("Not yet implemented")
 }
 
 @Composable
