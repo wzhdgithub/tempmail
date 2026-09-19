@@ -198,10 +198,12 @@ class DampedDragAnimation(
         pressJob?.cancel()
         velocityTracker.resetTracking()
         pressJob = animationScope.launch {
-            // 一按即进入形变态（与 KernelSU 一致，无需长按等待）
-            launch { pressProgressAnimation.animateTo(1f, pressProgressAnimationSpec) }
-            launch { scaleXAnimation.animateTo(pressedScale, scaleXAnimationSpec) }
-            launch { scaleYAnimation.animateTo(pressedScale, scaleYAnimationSpec) }
+            // 按下即用最大强度：直接吸附到满形变，不做渐入。
+            // 原因：部分 ROM（如 ColorOS）会取消"静止按住"手势，渐入会来不及呈现；
+            // 松手仍走弹簧回弹，保证恢复过程自然。
+            pressProgressAnimation.snapTo(1f)
+            scaleXAnimation.snapTo(pressedScale)
+            scaleYAnimation.snapTo(pressedScale)
         }
     }
 
