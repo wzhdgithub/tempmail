@@ -30,7 +30,7 @@
 - `AppState` 单一数据源通过 `mutableStateOf` 驱动 Compose 重组，状态管理直观
 - 网络请求使用协程（`Dispatchers.IO`），不引入 Flow/架构组件，保持轻量
 
-所有 UI、网络、解析、更新逻辑均集中于 `MainActivity.kt`（约 1930 行），配合 `ui/theme/` 下的主题配置。
+所有 UI、网络、解析、更新逻辑均集中于 `MainActivity.kt`（约 2440 行），配合 `ui/theme/`（主题与 Miuix 组件桥接）与 `ui/glass/`（液态玻璃底栏）下的实现。
 
 ### 工作流程
 
@@ -52,15 +52,15 @@
 
 | 层级 | 技术 | 版本 |
 |------|------|------|
-| 语言 | Kotlin | 1.9.22 |
-| UI | Jetpack Compose + Material 3 | BOM 2024.01.00 |
-| 编译器 | Kotlin Compiler Extension | 1.5.8 |
+| 语言 | Kotlin | 2.4.20 |
+| UI | Jetpack Compose + Material 3 + Miuix | Compose BOM 2026.05.01（ui 1.11.2 / material3 1.4.0）/ Miuix 0.9.3 |
+| 编译器 | Kotlin Compose 编译器插件（随 Kotlin 版本发布） | 2.4.20 |
 | 网络 | OkHttp | 4.12.0 |
 | JSON | org.json (Android 内置) | — |
-| 构建 | Android Gradle Plugin | 8.13.0 |
+| 构建 | Android Gradle Plugin / Gradle | 8.13.0 / 8.14.4（compileSdk 37） |
 | 最低 SDK | Android 7.0 (API 24) | — |
 | 目标 SDK | Android 14 (API 34) | — |
-| 编译 SDK | Android 14 (API 34) | — |
+| 编译 SDK | Android SDK 37（Miuix 0.9.3 要求，AGP 8.13 需 `android.suppressUnsupportedCompileSdk=37` 放行） | — |
 | 签名 | 自定义 keystore.jks | — |
 
 ### 选择理由
@@ -119,7 +119,7 @@ release { isMinifyEnabled = true; isShrinkResources = true }
 | 语言 | 支持 15 种语言：中文、English、日本語、한국어、Français、Deutsch、Español、Português、Русский、Italiano、العربية、हिन्दी、Tiếng Việt、ไทย、Bahasa Indonesia |
 | 深色模式 | 开关切换亮色/深色主题，实时生效 |
 | 主题风格 | `Material3`（默认）与 `Miuix` 两套主题一键切换，Material3 表现与定制前完全一致 |
-| 底栏风格 | 仅 Miuix 主题下提供：`悬浮`（默认，轻量悬浮底栏）与 `Liquid Glass`（液态玻璃底栏，玻璃质感 + 滑动指示器 + 按压回弹） |
+| 底栏风格 | 仅 Miuix 主题下提供：`悬浮`（默认，轻量悬浮底栏）与 `Liquid Glass`（真·液态玻璃底栏：API 33+ 走 miuix-blur 真实模糊/边缘折射/色散，支持按住拖动切换；低版本自动回退为渐变伪玻璃） |
 | 检查更新 | 手动触发 GitHub Releases 检查 |
 | 自动检查 | 启动时自动检查更新，可通过开关关闭 |
 | 关于 | 应用简介 |
@@ -216,6 +216,7 @@ PearAPI 返回的 `receivedata` 格式：
 | v1.7 | 历史邮箱一键复用、设置持久化、版本号统一读取 BuildConfig |
 | v1.8 | 配置更改状态持久化（rememberSaveable）、时间戳排序、Dialog 文案全面国际化、SHA-256 更新校验、签名凭据外置、Release 日志剥离 |
 | v1.9 | WebView 泄漏修复、状态栏图标跟随应用主题、更新限流误报修复、验证码正则修正、远程图片默认关闭（防追踪）、下载可取消、自适应图标 |
+| v2.0 | 工具链升级（Kotlin 2.4.20 / Compose 1.11.2 / material3 1.4.0 / compileSdk 37）；底栏 Liquid Glass 升级为 miuix-blur 真玻璃（模糊 + 折射 + 色散 + 按压透镜放大 + 拖拽切换）；Miuix 主题改为真正的 Miuix 组件（卡片/开关/按钮/分隔线等），Material3 主题保持原样 |
 
 ---
 
@@ -223,9 +224,9 @@ PearAPI 返回的 `receivedata` 格式：
 
 ### 环境要求
 
-- **JDK 24**（`$env:JAVA_HOME = "C:\Program Files\Java\jdk-24"`）：用于运行 Gradle/Kotlin 编译守护进程（JDK 25 与 Kotlin 1.9.22 的版本号解析器不兼容）；编译产物目标为 Java 17
-- Android SDK 34
-- Gradle 8.13 (wrapper 自动下载，Windows 用 `gradlew.bat`，Linux/macOS 用 `./gradlew`)
+- **JDK 24**（`$env:JAVA_HOME = "C:\Program Files\Java\jdk-24"`）：用于运行 Gradle/Kotlin 编译守护进程；编译产物目标为 Java 17
+- Android SDK：platform 37 与 build-tools 36+（compileSdk = 37）
+- Gradle 8.14.4 (wrapper 自动下载，Windows 用 `gradlew.bat`，Linux/macOS 用 `./gradlew`)
 
 ### 构建 Debug APK
 
@@ -256,20 +257,25 @@ APK 输出位置：`app/build/outputs/apk/release/app-release.apk`
 
 ```
 TempMailApp/
-├── build.gradle.kts              # 项目级构建配置 (AGP 8.13 + Kotlin 1.9.22)
+├── build.gradle.kts              # 项目级构建配置 (AGP 8.13 + Kotlin 2.4.20)
 ├── settings.gradle.kts           # 项目设置
-├── gradle.properties             # Gradle 属性
+├── gradle.properties             # Gradle 属性（含 compileSdk 37 放行开关）
 ├── app/
 │   ├── build.gradle.kts          # 模块构建配置
 │   ├── keystore.jks              # 签名文件
 │   ├── proguard-rules.pro        # ProGuard 规则
 │   └── src/main/
-│       ├── AndroidManifest.xml
+│       ├── AndroidManifest.xml   # 含 miuix-blur 的 overrideLibrary 声明
 │       ├── java/com/tempmail/app/
-│       │   ├── MainActivity.kt   # 全部逻辑（约 1586 行）
+│       │   ├── MainActivity.kt   # 全部逻辑（约 2440 行）
+│       │   ├── ui/glass/         # 液态玻璃底栏
+│       │   │   ├── GlassBottomBar.kt   # 玻璃外壳/胶囊/高光/lens 着色器
+│       │   │   ├── GlassInteraction.kt # 拖拽动画/按压光斑/手势
+│       │   │   └── InnerShadow.kt      # 胶囊内阴影
 │       │   └── ui/theme/
-│       │       ├── Color.kt      # 颜色定义
-│       │       ├── Theme.kt      # Material3 主题
+│       │       ├── Color.kt      # 颜色定义与 ThemeStyle
+│       │       ├── Theme.kt      # Material3 / Miuix 双主题装配
+│       │       ├── MiuixComponents.kt  # Miuix 组件桥接（Themed* 封装）
 │       │       └── Type.kt       # 排版配置
 │       └── res/
 │           ├── drawable/         # 启动图标 (Vector Drawable)
