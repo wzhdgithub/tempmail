@@ -21,7 +21,9 @@ val hasReleaseKeystore = !releaseStorePassword.isNullOrBlank() && !releaseKeyPas
 
 android {
     namespace = "com.tempmail.app"
-    compileSdk = 36
+    // Miuix 0.9.3 要求 compileSdk >= 37（AGP 8.13 推荐上限 36，已在
+    // gradle.properties 用 android.suppressUnsupportedCompileSdk=37 放行）
+    compileSdk = 37
 
     defaultConfig {
         applicationId = "com.tempmail.app"
@@ -96,6 +98,12 @@ dependencies {
     implementation("androidx.activity:activity-compose:1.8.2")
 
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
+
+    // Miuix（KernelSU 同款 UI 框架）：miuix-ui 提供组件，miuix-blur 提供
+    // RuntimeShader 液态玻璃模糊（实际模糊效果仅 API 33+，低版本自动降级）
+    val miuixVersion = "0.9.3"
+    implementation("top.yukonga.miuix.kmp:miuix-ui-android:$miuixVersion")
+    implementation("top.yukonga.miuix.kmp:miuix-blur-android:$miuixVersion")
 
     debugImplementation("androidx.compose.ui:ui-tooling")
 }

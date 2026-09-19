@@ -5,6 +5,10 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
+    <!-- miuix-blur 声明 minSdk 33（RuntimeShader 模糊依赖），本应用保留 minSdk 24：
+         API 33+ 走真实玻璃模糊，低版本在代码中运行时降级为伪玻璃底栏，不触碰该类库。 -->
+    <uses-sdk tools:overrideLibrary="top.yukonga.miuix.kmp.blur" />
+
     <application
         android:allowBackup="false"
         android:icon="@mipmap/ic_launcher"
