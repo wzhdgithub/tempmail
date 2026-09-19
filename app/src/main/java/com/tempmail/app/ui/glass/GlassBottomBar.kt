@@ -2,11 +2,10 @@ package com.tempmail.app.ui.glass
 
 import android.annotation.SuppressLint
 import android.os.Build
-import android.util.Log
-import android.view.HapticFeedbackConstants
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.EaseOut
 import androidx.compose.animation.core.spring
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -55,17 +54,16 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.GraphicsLayerScope
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.util.fastCoerceAtMost
 import androidx.compose.ui.util.fastCoerceIn
 import androidx.compose.ui.util.lerp
@@ -110,16 +108,10 @@ import kotlin.math.sin
 // API 仅在 API 33+ 才会被执行：调用方（MainActivity）必须先经 isGlassBlurSupported()
 // 判断，低版本回退到原有伪玻璃底栏，保证低版本设备不会加载该类库。
 
-/** 诊断用日志标签：定位触摸事件与触觉反馈是否被系统接受。 */
-private const val GLASS_TAG = "GlassTouch"
-
 private val GlassBarShape = RoundedCornerShape(28.dp)
 
 // ==================== 玻璃手感参数（更黏更弹） ====================
-// 集中在此处便于调参：数值越大越"液态"，越小越克制。
-
-/** 长按进入液态交互态的阈值（ms）：未达阈值即松手则玻璃不形变。 */
-private const val HOLD_DELAY_MILLIS = 150L
+// 集中在此处便于调参：数值越大越"液态"，越小越克制。按下即进入形变态（无长按门槛）。
 
 /** 松手时的惯性预测时长（s）：越大越"滑"，快速甩动更易吸附到相邻 Tab。 */
 private const val INERTIA_PREDICT_SECONDS = 0.22f
@@ -296,23 +288,6 @@ private fun GlassBar(
     var currentIndex by remember { mutableIntStateOf(selectedIndex) }
     val onSelectedUpdated by rememberUpdatedState(onSelect)
 
-    // 触觉反馈：长按真正进入形变态时一次 LongPress；拖动跨过 Tab 边界时轻 tick
-    // 注：此处直接用 View.performHapticFeedback 并记录返回值，便于定位 ROM 是否接受了震动请求
-    val hapticView = LocalView.current
-    val hapticLongPress: () -> Unit = remember(hapticView) {
-        {
-            val accepted = hapticView.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
-            Log.i(GLASS_TAG, "长按进入形变态，LONG_PRESS 震动被系统接受=$accepted")
-        }
-    }
-    val hapticTick: () -> Unit = remember(hapticView) {
-        {
-            val accepted = hapticView.performHapticFeedback(HapticFeedbackConstants.TEXT_HANDLE_MOVE)
-            Log.i(GLASS_TAG, "跨 Tab tick，震动被系统接受=$accepted")
-        }
-    }
-    var lastHapticIndex by remember { mutableIntStateOf(selectedIndex) }
-
     fun indexAt(positionX: Float): Int {
         if (tabWidthPx == 0f) return currentIndex
         val horizontalPaddingPx = with(density) { 4.dp.toPx() }
@@ -330,13 +305,8 @@ private fun GlassBar(
             visibilityThreshold = 0.001f,
             initialScale = 1f,
             pressedScale = 78f / 56f,
-            holdDelayMillis = HOLD_DELAY_MILLIS,
-            onHoldActivated = hapticLongPress,
             canDrag = { offset -> offset.x in 0f..totalWidthPx },
-            onDragStarted = { position ->
-                Log.i(GLASS_TAG, "底栏收到按下 x=${position.x.toInt()}（触摸层正常）")
-                updateValue(indexAt(position.x).toFloat())
-            },
+            onDragStarted = { position -> updateValue(indexAt(position.x).toFloat()) },
             onDragStopped = {
                 // 惯性吸附：位置 + 速度预测（INERTIA_PREDICT_SECONDS 的甩动行程），
                 // 快速甩动即使未越过中点也能吸附到相邻 Tab，慢速拖动则按位置就近吸附
@@ -360,15 +330,10 @@ private fun GlassBar(
             },
             onDrag = { _, dragAmount ->
                 if (tabWidthPx > 0f && dragAmount.x != 0f) {
-                    val next = (targetValue + dragAmount.x / tabWidthPx * if (isLtr) 1f else -1f)
-                        .coerceIn(0f, (tabsCount - 1).toFloat())
-                    updateValue(next)
-                    // 跨过 Tab 边界时给一次轻触觉反馈
-                    val rounded = next.roundToInt()
-                    if (rounded != lastHapticIndex) {
-                        lastHapticIndex = rounded
-                        hapticTick()
-                    }
+                    updateValue(
+                        (targetValue + dragAmount.x / tabWidthPx * if (isLtr) 1f else -1f)
+                            .coerceIn(0f, (tabsCount - 1).toFloat())
+                    )
                     animationScope.launch {
                         offsetAnimation.snapTo(offsetAnimation.value + dragAmount.x)
                     }
@@ -389,8 +354,6 @@ private fun GlassBar(
         if (currentIndex != index) {
             currentIndex = index
             onSelectedUpdated(index)
-            lastHapticIndex = index
-            hapticTick()
         }
         dampedDragAnimation.animateToValue(index.toFloat())
     }
@@ -548,11 +511,11 @@ private fun GlassBar(
                         backdrop = combinedBackdrop,
                         shape = { pillShape },
                         effects = {
-                            // 切换 Tab 的过程中也带玻璃流动（无需长按）：胶囊在 Tab 之间时折射显现，
-                            // 停稳后自动归零；长按时以按压力度为主，叠加更强的放大与色散
+                            // 玻璃流动强度：按下不动时由按压力度驱动；只要手指在拖动，
+                            // 该幅度就足以撑起完整放大镜（避免部分 ROM 取消"静止按住"手势时看不到效果）
                             val progress = dampedDragAnimation.pressProgress
                             val flow = dampedDragAnimation.dragFlow
-                            val strength = maxOf(progress, flow * 0.45f)
+                            val strength = maxOf(progress, flow)
                             lens(
                                 refractionHeight = 10.dp.toPx() * strength,
                                 refractionAmount = 14.dp.toPx() * strength * (1f + 0.5f * flow),
@@ -562,11 +525,16 @@ private fun GlassBar(
                         },
                         highlight = { pillHighlight.value.copy(alpha = dampedDragAnimation.pressProgress) },
                         layerBlock = {
-                            scaleX = dampedDragAnimation.scaleX
-                            scaleY = dampedDragAnimation.scaleY
+                            // 胶囊放大同样取「按压力度」与「拖动幅度」的较大者：
+                            // 拖动过程中胶囊就是一枚放大镜（放大并折射其下方内容）
+                            val bulge = lerp(
+                                1f,
+                                78f / 56f,
+                                maxOf(dampedDragAnimation.pressProgress, dampedDragAnimation.dragFlow)
+                            )
                             val velocity = dampedDragAnimation.velocity / 10f
-                            scaleX /= 1f - (velocity * 0.75f).fastCoerceIn(-0.2f, 0.2f)
-                            scaleY *= 1f - (velocity * 0.25f).fastCoerceIn(-0.2f, 0.2f)
+                            scaleX = bulge / (1f - (velocity * 0.75f).fastCoerceIn(-0.2f, 0.2f))
+                            scaleY = bulge * (1f - (velocity * 0.25f).fastCoerceIn(-0.2f, 0.2f))
                         },
                         onDrawSurface = {
                             val progress = dampedDragAnimation.pressProgress

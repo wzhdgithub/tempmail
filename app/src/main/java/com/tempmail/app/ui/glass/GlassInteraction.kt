@@ -38,7 +38,6 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.android.awaitFrame
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlin.math.abs
@@ -123,10 +122,6 @@ class DampedDragAnimation(
     val visibilityThreshold: Float,
     val initialScale: Float,
     val pressedScale: Float,
-    /** 长按阈值：按住超过该时长才进入液态形变状态（未达阈值即松手则不形变）。 */
-    val holdDelayMillis: Long = 200L,
-    /** 长按达到阈值、真正进入形变态时的回调（用于触觉反馈等提示）。 */
-    val onHoldActivated: () -> Unit = {},
     val canDrag: (Offset) -> Boolean = { true },
     val onDragStarted: DampedDragAnimation.(position: Offset) -> Unit,
     val onDragStopped: DampedDragAnimation.() -> Unit,
@@ -203,9 +198,7 @@ class DampedDragAnimation(
         pressJob?.cancel()
         velocityTracker.resetTracking()
         pressJob = animationScope.launch {
-            // 长按阈值：先等待再进入形变，避免轻触/快速滑动时玻璃"液化"
-            delay(holdDelayMillis)
-            onHoldActivated()
+            // 一按即进入形变态（与 KernelSU 一致，无需长按等待）
             launch { pressProgressAnimation.animateTo(1f, pressProgressAnimationSpec) }
             launch { scaleXAnimation.animateTo(pressedScale, scaleXAnimationSpec) }
             launch { scaleYAnimation.animateTo(pressedScale, scaleYAnimationSpec) }
@@ -213,7 +206,6 @@ class DampedDragAnimation(
     }
 
     fun release() {
-        // 未达长按阈值就松手：取消待触发的形变，玻璃保持原样
         pressJob?.cancel()
         releaseJob?.cancel()
         releaseJob = animationScope.launch {

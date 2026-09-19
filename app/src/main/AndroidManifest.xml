@@ -4,8 +4,6 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
-    <!-- 触觉反馈：部分 ROM（如 ColorOS）要求声明该权限才允许 performHapticFeedback 生效 -->
-    <uses-permission android:name="android.permission.VIBRATE" />
 
     <!-- miuix-blur 声明 minSdk 33（RuntimeShader 模糊依赖），本应用保留 minSdk 24：
          API 33+ 走真实玻璃模糊，低版本在代码中运行时降级为伪玻璃底栏，不触碰该类库。 -->
