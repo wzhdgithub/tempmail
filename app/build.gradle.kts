@@ -44,10 +44,6 @@ android {
         }
     }
 
-    adbOptions {
-        installOptions("-t")
-    }
-
     buildTypes {
         debug {
             if (hasReleaseKeystore) signingConfig = signingConfigs.getByName("release")
