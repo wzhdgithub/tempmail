@@ -89,8 +89,14 @@ import com.tempmail.app.ui.glass.GlassShell
 import com.tempmail.app.ui.glass.isGlassBlurSupported
 import com.tempmail.app.ui.theme.TempMailTheme
 import com.tempmail.app.ui.theme.ThemeStyle
+import com.tempmail.app.ui.theme.ThemedButton
+import com.tempmail.app.ui.theme.ThemedCard
+import com.tempmail.app.ui.theme.ThemedDivider
+import com.tempmail.app.ui.theme.ThemedIconButton
+import com.tempmail.app.ui.theme.ThemedLinearProgress
+import com.tempmail.app.ui.theme.ThemedSwitch
+import com.tempmail.app.ui.theme.ThemedTextButton
 import com.tempmail.app.ui.theme.themedCornerShape
-import com.tempmail.app.ui.theme.themedSwitchColors
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -950,7 +956,7 @@ class MainActivity : ComponentActivity() {
                             }
                         }
                         Spacer(Modifier.height(24.dp))
-                        Button(
+                        ThemedButton(
                             onClick = {
                                 if (selectedGender.isEmpty()) {
                                     scope.launch { snackbar.showSnackbar(s.genderSelect) }
@@ -1082,13 +1088,13 @@ class MainActivity : ComponentActivity() {
                             }
                         },
                         confirmButton = {
-                            TextButton(onClick = {
+                            ThemedTextButton(onClick = {
                                 showUpdateDialog = false
                                 downloadInstall(updateUrl, updateSha)
                             }) { Text(s.updateNow) }
                         },
                         dismissButton = {
-                            TextButton(onClick = { showUpdateDialog = false }) { Text(s.updateLater) }
+                            ThemedTextButton(onClick = { showUpdateDialog = false }) { Text(s.updateLater) }
                         }
                     )
                 }
@@ -1101,14 +1107,14 @@ class MainActivity : ComponentActivity() {
                         title = { Text(s.updating) },
                         text = {
                             Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
-                                LinearProgressIndicator(progress = { downloadProgress / 100f }, modifier = Modifier.fillMaxWidth())
+                                ThemedLinearProgress(progress = { downloadProgress / 100f }, modifier = Modifier.fillMaxWidth())
                                 Spacer(Modifier.height(8.dp))
                                 Text("${downloadProgress}%")
                             }
                         },
                         confirmButton = {},
                         dismissButton = {
-                            TextButton(onClick = {
+                            ThemedTextButton(onClick = {
                                 downloadCall?.cancel()
                                 showDownloadProgress = false
                             }) { Text(s.cancel) }
@@ -1388,7 +1394,7 @@ private fun InboxTab(
         Text(s.title, style = MaterialTheme.typography.headlineLarge)
         Spacer(Modifier.height(28.dp))
 
-        Button(
+        ThemedButton(
             onClick = {
                 onState { it.copy(isLoading = true) }
                 scope.launch(Dispatchers.IO) {
@@ -1434,7 +1440,7 @@ private fun InboxTab(
 
         if (state.email.isNotBlank()) {
             Spacer(Modifier.height(20.dp))
-            Card(modifier = Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.large) {
+            ThemedCard(modifier = Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.large) {
                 Column(Modifier.padding(20.dp)) {
                     Text(s.yourEmail, style = MaterialTheme.typography.labelLarge)
                     Spacer(Modifier.height(12.dp))
@@ -1445,7 +1451,7 @@ private fun InboxTab(
                             style = MaterialTheme.typography.bodyLarge.copy(fontFamily = FontFamily.Monospace),
                             color = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.weight(1f))
-                        TextButton(onClick = {
+                        ThemedTextButton(onClick = {
                             (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager)
                                 .setPrimaryClip(ClipData.newPlainText("email", state.email))
                             scope.launch { snackbar.showSnackbar(s.copied) }
@@ -1497,7 +1503,7 @@ private fun InboxTab(
                 )
             }
             sorted.forEach { item ->
-                Card(
+                ThemedCard(
                     Modifier.fillMaxWidth().padding(vertical = 4.dp)
                         .clickable {
                             dialogBody = if (item.body.isNotBlank()) item.body
@@ -1519,7 +1525,7 @@ private fun InboxTab(
                             color = MaterialTheme.colorScheme.onSurfaceVariant)
                         if (item.body.isNotBlank()) {
                             Spacer(Modifier.height(8.dp))
-                            HorizontalDivider()
+                            ThemedDivider()
                             Spacer(Modifier.height(8.dp))
                             Text(item.body,
                                 style = MaterialTheme.typography.bodySmall.copy(
@@ -1537,7 +1543,7 @@ private fun InboxTab(
             Text(s.rawData, style = MaterialTheme.typography.titleMedium)
             Spacer(Modifier.height(8.dp))
             state.rawMessages.reversed().forEach { raw ->
-                Card(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+                ThemedCard(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
                     Text(raw, Modifier.padding(16.dp),
                         style = MaterialTheme.typography.bodySmall)
                 }
@@ -1647,11 +1653,11 @@ private fun InboxTab(
                 }
             },
             confirmButton = {
-                TextButton(onClick = { showBodyDialog = false }) { Text(s.close) }
+                ThemedTextButton(onClick = { showBodyDialog = false }) { Text(s.close) }
             },
             dismissButton = code?.let { c ->
                 {
-                    TextButton(onClick = {
+                    ThemedTextButton(onClick = {
                         (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager)
                             .setPrimaryClip(ClipData.newPlainText("verification_code", c))
                         scope.launch { snackbar.showSnackbar("${s.codeCopied}: $c") }
@@ -1693,7 +1699,7 @@ private fun HistoryTab(
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
         } else {
             allEmails.forEach { h ->
-                Card(
+                ThemedCard(
                     Modifier.fillMaxWidth().padding(vertical = 4.dp)
                         .then(if (!h.isActive) Modifier.clickable { onUseEmail(h.email) } else Modifier),
                     shape = MaterialTheme.shapes.medium
@@ -1782,20 +1788,20 @@ private fun SettingsTab(
                             Text(s.settings, style = MaterialTheme.typography.headlineSmall)
                             Spacer(Modifier.height(24.dp))
 
-                            Card(Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.large) {
+                            ThemedCard(Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.large) {
                                 Column {
                                     SettingsItem(
                                         label = s.languageLabel,
                                         value = allLanguages.find { it.code == state.language }?.label ?: "中文",
                                         onClick = { page = SettingsPage.Language }
                                     )
-                                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                                    ThemedDivider(modifier = Modifier.padding(horizontal = 16.dp))
                                     SettingsItem(
                                         label = s.darkMode,
                                         value = if (state.isDarkMode) "ON" else "OFF",
                                         onClick = { page = SettingsPage.DarkMode }
                                     )
-                                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                                    ThemedDivider(modifier = Modifier.padding(horizontal = 16.dp))
                                     SettingsItem(
                                         label = s.themeStyle,
                                         value = if (state.themeStyle == ThemeStyle.HyperOS) s.themeHyperOS else s.themeDefault,
@@ -1803,37 +1809,36 @@ private fun SettingsTab(
                                     )
                                     // 底栏风格仅在 Miuix 主题下提供，Material3 主题保持原样
                                     if (state.themeStyle == ThemeStyle.HyperOS) {
-                                        HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                                        ThemedDivider(modifier = Modifier.padding(horizontal = 16.dp))
                                         SettingsItem(
                                             label = s.barStyle,
                                             value = if (state.barStyle == BarStyle.LiquidGlass) s.barStyleGlass else s.barStyleFloat,
                                             onClick = { page = SettingsPage.BarStyle }
                                         )
                                     }
-                            HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                            ThemedDivider(modifier = Modifier.padding(horizontal = 16.dp))
                             SettingsItem(
                                 label = s.about,
                                 onClick = { page = SettingsPage.About }
                             )
-                            HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                            ThemedDivider(modifier = Modifier.padding(horizontal = 16.dp))
                             SettingsItem(
                                 label = s.checkUpdate,
                                 onClick = { onCheckUpdate(true) }
                             )
-                            HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                            ThemedDivider(modifier = Modifier.padding(horizontal = 16.dp))
                             Row(
                                 Modifier.padding(horizontal = 20.dp, vertical = 16.dp).fillMaxWidth(),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Text(s.autoCheckUpdate, style = MaterialTheme.typography.bodyLarge,
                                     modifier = Modifier.weight(1f))
-                                Switch(
+                                ThemedSwitch(
                                     checked = state.autoCheckUpdate,
-                                    onCheckedChange = { onState(state.copy(autoCheckUpdate = it)) },
-                                    colors = themedSwitchColors()
+                                    onCheckedChange = { onState(state.copy(autoCheckUpdate = it)) }
                                 )
                             }
-                            HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                            ThemedDivider(modifier = Modifier.padding(horizontal = 16.dp))
                             SettingsItem(
                                 label = s.author,
                                 onClick = { page = SettingsPage.Author }
@@ -1843,17 +1848,17 @@ private fun SettingsTab(
                         }
 
                         SettingsPage.Language -> {
-                            IconButton(onClick = { page = SettingsPage.Main }) {
+                            ThemedIconButton(onClick = { page = SettingsPage.Main }) {
                                 Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = s.back)
                             }
                             Spacer(Modifier.height(8.dp))
                             Text(s.langSelect, style = MaterialTheme.typography.headlineSmall)
                             Spacer(Modifier.height(20.dp))
 
-                            Card(Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.large) {
+                            ThemedCard(Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.large) {
                                 Column {
                                     allLanguages.forEachIndexed { i, lang ->
-                                        if (i > 0) HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                                        if (i > 0) ThemedDivider(modifier = Modifier.padding(horizontal = 16.dp))
                                         LanguageOption(lang.label, state.language == lang.code,
                                             onClick = { onState(state.copy(language = lang.code)); page = SettingsPage.Main })
                                     }
@@ -1862,42 +1867,41 @@ private fun SettingsTab(
                         }
 
                         SettingsPage.DarkMode -> {
-                            IconButton(onClick = { page = SettingsPage.Main }) {
+                            ThemedIconButton(onClick = { page = SettingsPage.Main }) {
                                 Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = s.back)
                             }
                             Spacer(Modifier.height(8.dp))
                             Text(s.darkModeSetting, style = MaterialTheme.typography.headlineSmall)
                             Spacer(Modifier.height(20.dp))
 
-                            Card(Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.large) {
+                            ThemedCard(Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.large) {
                                 Row(
                                     Modifier.padding(horizontal = 20.dp, vertical = 16.dp).fillMaxWidth(),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Text(s.darkMode, style = MaterialTheme.typography.bodyLarge,
                                         modifier = Modifier.weight(1f))
-                                    Switch(
+                                    ThemedSwitch(
                                         checked = state.isDarkMode,
-                                        onCheckedChange = { onState(state.copy(isDarkMode = it)) },
-                                        colors = themedSwitchColors()
+                                        onCheckedChange = { onState(state.copy(isDarkMode = it)) }
                                     )
                                 }
                             }
                         }
 
                         SettingsPage.Theme -> {
-                            IconButton(onClick = { page = SettingsPage.Main }) {
+                            ThemedIconButton(onClick = { page = SettingsPage.Main }) {
                                 Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = s.back)
                             }
                             Spacer(Modifier.height(8.dp))
                             Text(s.themeStyle, style = MaterialTheme.typography.headlineSmall)
                             Spacer(Modifier.height(20.dp))
 
-                            Card(Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.large) {
+                            ThemedCard(Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.large) {
                                 Column {
                                     LanguageOption(s.themeDefault, state.themeStyle == ThemeStyle.Material3,
                                         onClick = { onState(state.copy(themeStyle = ThemeStyle.Material3)); page = SettingsPage.Main })
-                                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                                    ThemedDivider(modifier = Modifier.padding(horizontal = 16.dp))
                                     LanguageOption(s.themeHyperOS, state.themeStyle == ThemeStyle.HyperOS,
                                         onClick = { onState(state.copy(themeStyle = ThemeStyle.HyperOS)); page = SettingsPage.Main })
                                 }
@@ -1905,18 +1909,18 @@ private fun SettingsTab(
                         }
 
                         SettingsPage.BarStyle -> {
-                            IconButton(onClick = { page = SettingsPage.Main }) {
+                            ThemedIconButton(onClick = { page = SettingsPage.Main }) {
                                 Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = s.back)
                             }
                             Spacer(Modifier.height(8.dp))
                             Text(s.barStyle, style = MaterialTheme.typography.headlineSmall)
                             Spacer(Modifier.height(20.dp))
 
-                            Card(Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.large) {
+                            ThemedCard(Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.large) {
                                 Column {
                                     LanguageOption(s.barStyleFloat, state.barStyle == BarStyle.Float,
                                         onClick = { onState(state.copy(barStyle = BarStyle.Float)); page = SettingsPage.Main })
-                                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                                    ThemedDivider(modifier = Modifier.padding(horizontal = 16.dp))
                                     LanguageOption(s.barStyleGlass, state.barStyle == BarStyle.LiquidGlass,
                                         onClick = { onState(state.copy(barStyle = BarStyle.LiquidGlass)); page = SettingsPage.Main })
                                 }
@@ -1924,13 +1928,13 @@ private fun SettingsTab(
                         }
 
                         SettingsPage.About -> {
-                            IconButton(onClick = { page = SettingsPage.Main }) {
+                            ThemedIconButton(onClick = { page = SettingsPage.Main }) {
                                 Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = s.back)
                             }
                             Spacer(Modifier.height(8.dp))
                             Text(s.about, style = MaterialTheme.typography.headlineSmall)
                             Spacer(Modifier.height(20.dp))
-                            Card(Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.large) {
+                            ThemedCard(Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.large) {
                                 Column(Modifier.padding(20.dp)) {
                                     Text(s.aboutDesc, style = MaterialTheme.typography.bodyMedium)
                                 }
@@ -1938,13 +1942,13 @@ private fun SettingsTab(
                         }
 
                 SettingsPage.Author -> {
-                    IconButton(onClick = { page = SettingsPage.Main }) {
+                    ThemedIconButton(onClick = { page = SettingsPage.Main }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = s.back)
                     }
                     Spacer(Modifier.height(8.dp))
                     Text(s.author, style = MaterialTheme.typography.headlineSmall)
                     Spacer(Modifier.height(20.dp))
-                    Card(Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.large) {
+                    ThemedCard(Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.large) {
                         Column(Modifier.padding(20.dp)) {
                             Text("GitHub", style = MaterialTheme.typography.labelLarge)
                             Spacer(Modifier.height(4.dp))
@@ -1978,7 +1982,7 @@ private fun SettingsTab(
                                         Uri.parse("https://wzhblog6.pwapi.cn/")))
                                 })
                             Spacer(Modifier.height(12.dp))
-                            HorizontalDivider()
+                            ThemedDivider()
                             Spacer(Modifier.height(12.dp))
                             Text("Email", style = MaterialTheme.typography.labelLarge)
                             Spacer(Modifier.height(4.dp))

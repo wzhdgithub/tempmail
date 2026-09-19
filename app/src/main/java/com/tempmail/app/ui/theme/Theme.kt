@@ -154,8 +154,13 @@ fun TempMailTheme(
         MaterialTheme(
             colorScheme = colorScheme,
             shapes = shapes,
-            typography = Typography,
-            content = content
-        )
+            typography = Typography
+        ) {
+            // HyperOS 主题下再叠加一层 Miuix 主题，供 Miuix 组件读取其颜色与文字样式；
+            // Material3 主题直接透传，组件与像素表现与迁移前一致。
+            MiuixThemeIfNeeded(themeStyle = themeStyle, darkTheme = darkTheme) {
+                content()
+            }
+        }
     }
 }
