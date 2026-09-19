@@ -129,8 +129,12 @@ private const val STRETCH_LIMIT = 0.12f
 /** 底栏高度 + 底部外边距：页面滚动内容需在末尾预留的额外空间（可滚到底栏下方）。 */
 val GlassBarSpace = 88.dp
 
-/** 真实模糊（RuntimeShader）仅在 API 33+ 可用。 */
-fun isGlassBlurSupported(): Boolean = Build.VERSION.SDK_INT >= 33
+/**
+ * 真实模糊需要 API 33+ 的 RuntimeShader，且设备需实际支持 AGSL。
+ * 任一条件不满足时回退到伪玻璃底栏（渐变 + 描边），避免出现"透明但无模糊"的半成品观感。
+ */
+fun isGlassBlurSupported(): Boolean =
+    Build.VERSION.SDK_INT >= 33 && isRuntimeShaderSupported()
 
 data class GlassBarItem(val icon: ImageVector, val label: String)
 
