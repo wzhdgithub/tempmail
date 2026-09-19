@@ -50,7 +50,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Email
-import androidx.compose.material.icons.filled.KeyboardArrowRight
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -1069,7 +1069,7 @@ class MainActivity : ComponentActivity() {
                         title = { Text(s.updating) },
                         text = {
                             Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
-                                LinearProgressIndicator(progress = downloadProgress / 100f, modifier = Modifier.fillMaxWidth())
+                                LinearProgressIndicator(progress = { downloadProgress / 100f }, modifier = Modifier.fillMaxWidth())
                                 Spacer(Modifier.height(8.dp))
                                 Text("${downloadProgress}%")
                             }
@@ -1486,7 +1486,7 @@ private fun InboxTab(
                             color = MaterialTheme.colorScheme.onSurfaceVariant)
                         if (item.body.isNotBlank()) {
                             Spacer(Modifier.height(8.dp))
-                            Divider()
+                            HorizontalDivider()
                             Spacer(Modifier.height(8.dp))
                             Text(item.body,
                                 style = MaterialTheme.typography.bodySmall.copy(
@@ -1750,13 +1750,13 @@ private fun SettingsTab(
                                         value = allLanguages.find { it.code == state.language }?.label ?: "中文",
                                         onClick = { page = SettingsPage.Language }
                                     )
-                                    Divider(modifier = Modifier.padding(horizontal = 16.dp))
+                                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
                                     SettingsItem(
                                         label = s.darkMode,
                                         value = if (state.isDarkMode) "ON" else "OFF",
                                         onClick = { page = SettingsPage.DarkMode }
                                     )
-                                    Divider(modifier = Modifier.padding(horizontal = 16.dp))
+                                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
                                     SettingsItem(
                                         label = s.themeStyle,
                                         value = if (state.themeStyle == ThemeStyle.HyperOS) s.themeHyperOS else s.themeDefault,
@@ -1764,24 +1764,24 @@ private fun SettingsTab(
                                     )
                                     // 底栏风格仅在 Miuix 主题下提供，Material3 主题保持原样
                                     if (state.themeStyle == ThemeStyle.HyperOS) {
-                                        Divider(modifier = Modifier.padding(horizontal = 16.dp))
+                                        HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
                                         SettingsItem(
                                             label = s.barStyle,
                                             value = if (state.barStyle == BarStyle.LiquidGlass) s.barStyleGlass else s.barStyleFloat,
                                             onClick = { page = SettingsPage.BarStyle }
                                         )
                                     }
-                            Divider(modifier = Modifier.padding(horizontal = 16.dp))
+                            HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
                             SettingsItem(
                                 label = s.about,
                                 onClick = { page = SettingsPage.About }
                             )
-                            Divider(modifier = Modifier.padding(horizontal = 16.dp))
+                            HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
                             SettingsItem(
                                 label = s.checkUpdate,
                                 onClick = { onCheckUpdate(true) }
                             )
-                            Divider(modifier = Modifier.padding(horizontal = 16.dp))
+                            HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
                             Row(
                                 Modifier.padding(horizontal = 20.dp, vertical = 16.dp).fillMaxWidth(),
                                 verticalAlignment = Alignment.CenterVertically
@@ -1794,7 +1794,7 @@ private fun SettingsTab(
                                     colors = themedSwitchColors()
                                 )
                             }
-                            Divider(modifier = Modifier.padding(horizontal = 16.dp))
+                            HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
                             SettingsItem(
                                 label = s.author,
                                 onClick = { page = SettingsPage.Author }
@@ -1814,7 +1814,7 @@ private fun SettingsTab(
                             Card(Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.large) {
                                 Column {
                                     allLanguages.forEachIndexed { i, lang ->
-                                        if (i > 0) Divider(modifier = Modifier.padding(horizontal = 16.dp))
+                                        if (i > 0) HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
                                         LanguageOption(lang.label, state.language == lang.code,
                                             onClick = { onState(state.copy(language = lang.code)); page = SettingsPage.Main })
                                     }
@@ -1858,7 +1858,7 @@ private fun SettingsTab(
                                 Column {
                                     LanguageOption(s.themeDefault, state.themeStyle == ThemeStyle.Material3,
                                         onClick = { onState(state.copy(themeStyle = ThemeStyle.Material3)); page = SettingsPage.Main })
-                                    Divider(modifier = Modifier.padding(horizontal = 16.dp))
+                                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
                                     LanguageOption(s.themeHyperOS, state.themeStyle == ThemeStyle.HyperOS,
                                         onClick = { onState(state.copy(themeStyle = ThemeStyle.HyperOS)); page = SettingsPage.Main })
                                 }
@@ -1877,7 +1877,7 @@ private fun SettingsTab(
                                 Column {
                                     LanguageOption(s.barStyleFloat, state.barStyle == BarStyle.Float,
                                         onClick = { onState(state.copy(barStyle = BarStyle.Float)); page = SettingsPage.Main })
-                                    Divider(modifier = Modifier.padding(horizontal = 16.dp))
+                                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
                                     LanguageOption(s.barStyleGlass, state.barStyle == BarStyle.LiquidGlass,
                                         onClick = { onState(state.copy(barStyle = BarStyle.LiquidGlass)); page = SettingsPage.Main })
                                 }
@@ -1939,7 +1939,7 @@ private fun SettingsTab(
                                         Uri.parse("https://wzhblog6.pwapi.cn/")))
                                 })
                             Spacer(Modifier.height(12.dp))
-                            Divider()
+                            HorizontalDivider()
                             Spacer(Modifier.height(12.dp))
                             Text("Email", style = MaterialTheme.typography.labelLarge)
                             Spacer(Modifier.height(4.dp))
@@ -1982,7 +1982,7 @@ private fun SettingsItem(label: String, value: String? = null, onClick: () -> Un
             Text(value, style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
-        Icon(Icons.Default.KeyboardArrowRight, contentDescription = null,
+        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null,
             tint = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }

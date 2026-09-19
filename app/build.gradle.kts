@@ -3,6 +3,7 @@ import java.util.Properties
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
+    id("org.jetbrains.kotlin.plugin.compose")
 }
 
 // 签名凭据从根目录 keystore.properties（不纳入版本控制）读取，避免明文密码泄露。
@@ -20,7 +21,7 @@ val hasReleaseKeystore = !releaseStorePassword.isNullOrBlank() && !releaseKeyPas
 
 android {
     namespace = "com.tempmail.app"
-    compileSdk = 34
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.tempmail.app"
@@ -60,15 +61,9 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
-    kotlinOptions {
-        jvmTarget = "17"
-    }
     buildFeatures {
         compose = true
         buildConfig = true
-    }
-    composeOptions {
-        kotlinCompilerExtensionVersion = "1.5.8"
     }
     packaging {
         resources {
@@ -77,13 +72,23 @@ android {
     }
 }
 
+kotlin {
+    compilerOptions {
+        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
+    }
+}
+
 dependencies {
-    val composeBom = platform("androidx.compose:compose-bom:2024.01.00")
+    // Compose BOM 2026.05.01 -> ui/foundation/runtime 1.11.2（与 Miuix 所需的
+    // JetBrains Compose 1.11.1 映射的 androidx 版本精确一致）、material3 1.4.0
+    val composeBom = platform("androidx.compose:compose-bom:2026.05.01")
     implementation(composeBom)
 
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-graphics")
     implementation("androidx.compose.material3:material3")
+    // material3 1.4.0 起不再传递依赖 material-icons-core，需显式声明
+    implementation("androidx.compose.material:material-icons-core")
     implementation("androidx.compose.foundation:foundation")
 
     implementation("androidx.core:core-ktx:1.12.0")
