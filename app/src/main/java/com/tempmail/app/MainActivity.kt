@@ -1,5 +1,6 @@
 package com.tempmail.app
 
+import android.annotation.SuppressLint
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
@@ -18,8 +19,13 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.SystemBarStyle
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -27,9 +33,17 @@ import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.LocalIndication
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -45,14 +59,22 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.compositeOver
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import com.tempmail.app.ui.theme.TempMailTheme
 import com.tempmail.app.ui.theme.ThemeStyle
@@ -109,7 +131,8 @@ private data class Strings(
     val unknownSender: String,
     val cancel: String, val rawData: String,
     val authorHomepage: String, val projectRepo: String,
-    val themeStyle: String, val themeDefault: String, val themeHyperOS: String
+    val themeStyle: String, val themeDefault: String, val themeHyperOS: String,
+    val barStyle: String, val barStyleFloat: String, val barStyleGlass: String
 )
 
 private fun strings(lang: String): Strings = when (lang) {
@@ -137,7 +160,8 @@ private fun strings(lang: String): Strings = when (lang) {
         unknownSender = "Unknown sender",
         cancel = "Cancel", rawData = "Raw data:",
         authorHomepage = "Author Homepage", projectRepo = "Project Repository",
-        themeStyle = "Theme", themeDefault = "Default / Material3", themeHyperOS = "HyperOS"
+        themeStyle = "Theme", themeDefault = "Material3", themeHyperOS = "Miuix",
+        barStyle = "Bottom Bar", barStyleFloat = "Floating", barStyleGlass = "Liquid Glass"
     )
     "ja" -> Strings(
         title = "一時メール",
@@ -163,7 +187,8 @@ private fun strings(lang: String): Strings = when (lang) {
         unknownSender = "不明な送信者",
         cancel = "キャンセル", rawData = "生データ:",
         authorHomepage = "作者ホームページ", projectRepo = "プロジェクトリポジトリ",
-        themeStyle = "テーマ", themeDefault = "デフォルト / Material3", themeHyperOS = "HyperOS"
+        themeStyle = "テーマ", themeDefault = "Material3", themeHyperOS = "Miuix",
+        barStyle = "ボトムバー", barStyleFloat = "フローティング", barStyleGlass = "Liquid Glass"
     )
     "ko" -> Strings(
         title = "임시 메일",
@@ -189,7 +214,8 @@ private fun strings(lang: String): Strings = when (lang) {
         unknownSender = "알 수 없는 발신자",
         cancel = "취소", rawData = "원본 데이터:",
         authorHomepage = "작성자 홈페이지", projectRepo = "프로젝트 저장소",
-        themeStyle = "테마", themeDefault = "기본 / Material3", themeHyperOS = "HyperOS"
+        themeStyle = "테마", themeDefault = "Material3", themeHyperOS = "Miuix",
+        barStyle = "하단 바", barStyleFloat = "플로팅", barStyleGlass = "Liquid Glass"
     )
     "fr" -> Strings(
         title = "Temp Mail",
@@ -215,7 +241,8 @@ private fun strings(lang: String): Strings = when (lang) {
         unknownSender = "Expéditeur inconnu",
         cancel = "Annuler", rawData = "Données brutes :",
         authorHomepage = "Page de l'auteur", projectRepo = "Dépôt du projet",
-        themeStyle = "Thème", themeDefault = "Par défaut / Material3", themeHyperOS = "HyperOS"
+        themeStyle = "Thème", themeDefault = "Material3", themeHyperOS = "Miuix",
+        barStyle = "Barre inférieure", barStyleFloat = "Flottant", barStyleGlass = "Liquid Glass"
     )
     "de" -> Strings(
         title = "Temp Mail",
@@ -241,7 +268,8 @@ private fun strings(lang: String): Strings = when (lang) {
         unknownSender = "Unbekannter Absender",
         cancel = "Abbrechen", rawData = "Rohdaten:",
         authorHomepage = "Autorenseite", projectRepo = "Projekt-Repository",
-        themeStyle = "Design", themeDefault = "Standard / Material3", themeHyperOS = "HyperOS"
+        themeStyle = "Design", themeDefault = "Material3", themeHyperOS = "Miuix",
+        barStyle = "Navigationsleiste", barStyleFloat = "Schwebend", barStyleGlass = "Liquid Glass"
     )
     "es" -> Strings(
         title = "Correo Temporal",
@@ -267,7 +295,8 @@ private fun strings(lang: String): Strings = when (lang) {
         unknownSender = "Remitente desconocido",
         cancel = "Cancelar", rawData = "Datos sin procesar:",
         authorHomepage = "Página del autor", projectRepo = "Repositorio del proyecto",
-        themeStyle = "Tema", themeDefault = "Predeterminado / Material3", themeHyperOS = "HyperOS"
+        themeStyle = "Tema", themeDefault = "Material3", themeHyperOS = "Miuix",
+        barStyle = "Barra inferior", barStyleFloat = "Flotante", barStyleGlass = "Liquid Glass"
     )
     "pt" -> Strings(
         title = "Email Temporário",
@@ -293,7 +322,8 @@ private fun strings(lang: String): Strings = when (lang) {
         unknownSender = "Remetente desconhecido",
         cancel = "Cancelar", rawData = "Dados brutos:",
         authorHomepage = "Página do autor", projectRepo = "Repositório do projeto",
-        themeStyle = "Tema", themeDefault = "Padrão / Material3", themeHyperOS = "HyperOS"
+        themeStyle = "Tema", themeDefault = "Material3", themeHyperOS = "Miuix",
+        barStyle = "Barra inferior", barStyleFloat = "Flutuante", barStyleGlass = "Liquid Glass"
     )
     "ru" -> Strings(
         title = "Временная почта",
@@ -319,7 +349,8 @@ private fun strings(lang: String): Strings = when (lang) {
         unknownSender = "Неизвестный отправитель",
         cancel = "Отмена", rawData = "Исходные данные:",
         authorHomepage = "Страница автора", projectRepo = "Репозиторий проекта",
-        themeStyle = "Тема", themeDefault = "По умолчанию / Material3", themeHyperOS = "HyperOS"
+        themeStyle = "Тема", themeDefault = "Material3", themeHyperOS = "Miuix",
+        barStyle = "Нижняя панель", barStyleFloat = "Плавающая", barStyleGlass = "Liquid Glass"
     )
     "it" -> Strings(
         title = "Email Temporanea",
@@ -345,7 +376,8 @@ private fun strings(lang: String): Strings = when (lang) {
         unknownSender = "Mittente sconosciuto",
         cancel = "Annulla", rawData = "Dati grezzi:",
         authorHomepage = "Pagina dell'autore", projectRepo = "Repository del progetto",
-        themeStyle = "Tema", themeDefault = "Predefinito / Material3", themeHyperOS = "HyperOS"
+        themeStyle = "Tema", themeDefault = "Material3", themeHyperOS = "Miuix",
+        barStyle = "Barra inferiore", barStyleFloat = "Fluttuante", barStyleGlass = "Liquid Glass"
     )
     "ar" -> Strings(
         title = "بريد مؤقت",
@@ -371,7 +403,8 @@ private fun strings(lang: String): Strings = when (lang) {
         unknownSender = "مرسل غير معروف",
         cancel = "إلغاء", rawData = "البيانات الخام:",
         authorHomepage = "صفحة المؤلف", projectRepo = "مستودع المشروع",
-        themeStyle = "السمة", themeDefault = "افتراضي / Material3", themeHyperOS = "HyperOS"
+        themeStyle = "السمة", themeDefault = "Material3", themeHyperOS = "Miuix",
+        barStyle = "الشريط السفلي", barStyleFloat = "عائم", barStyleGlass = "Liquid Glass"
     )
     "hi" -> Strings(
         title = "अस्थायी मेल",
@@ -397,7 +430,8 @@ private fun strings(lang: String): Strings = when (lang) {
         unknownSender = "अज्ञात प्रेषक",
         cancel = "रद्द करें", rawData = "कच्चा डेटा:",
         authorHomepage = "लेखक का पेज", projectRepo = "प्रोजेक्ट रिपॉज़िटरी",
-        themeStyle = "थीम", themeDefault = "डिफ़ॉल्ट / Material3", themeHyperOS = "HyperOS"
+        themeStyle = "थीम", themeDefault = "Material3", themeHyperOS = "Miuix",
+        barStyle = "निचला बार", barStyleFloat = "फ़्लोटिंग", barStyleGlass = "Liquid Glass"
     )
     "vi" -> Strings(
         title = "Mail Tạm Thời",
@@ -423,7 +457,8 @@ private fun strings(lang: String): Strings = when (lang) {
         unknownSender = "Người gửi không xác định",
         cancel = "Hủy", rawData = "Dữ liệu thô:",
         authorHomepage = "Trang tác giả", projectRepo = "Kho dự án",
-        themeStyle = "Chủ đề", themeDefault = "Mặc định / Material3", themeHyperOS = "HyperOS"
+        themeStyle = "Chủ đề", themeDefault = "Material3", themeHyperOS = "Miuix",
+        barStyle = "Thanh dưới", barStyleFloat = "Nổi", barStyleGlass = "Liquid Glass"
     )
     "th" -> Strings(
         title = "อีเมลชั่วคราว",
@@ -449,7 +484,8 @@ private fun strings(lang: String): Strings = when (lang) {
         unknownSender = "ผู้ส่งที่ไม่รู้จัก",
         cancel = "ยกเลิก", rawData = "ข้อมูลดิบ:",
         authorHomepage = "หน้าผู้เขียน", projectRepo = "ที่เก็บโปรเจ็กต์",
-        themeStyle = "ธีม", themeDefault = "ค่าเริ่มต้น / Material3", themeHyperOS = "HyperOS"
+        themeStyle = "ธีม", themeDefault = "Material3", themeHyperOS = "Miuix",
+        barStyle = "แถบล่าง", barStyleFloat = "ลอย", barStyleGlass = "Liquid Glass"
     )
     "id" -> Strings(
         title = "Email Sementara",
@@ -475,7 +511,8 @@ private fun strings(lang: String): Strings = when (lang) {
         unknownSender = "Pengirim tidak dikenal",
         cancel = "Batal", rawData = "Data mentah:",
         authorHomepage = "Halaman Penulis", projectRepo = "Repositori Proyek",
-        themeStyle = "Tema", themeDefault = "Default / Material3", themeHyperOS = "HyperOS"
+        themeStyle = "Tema", themeDefault = "Material3", themeHyperOS = "Miuix",
+        barStyle = "Bilah bawah", barStyleFloat = "Mengambang", barStyleGlass = "Liquid Glass"
     )
     else -> Strings(
         title = "临时邮箱",
@@ -501,7 +538,8 @@ private fun strings(lang: String): Strings = when (lang) {
         unknownSender = "未知发件人",
         cancel = "取消", rawData = "原始数据:",
         authorHomepage = "作者主页", projectRepo = "项目仓库",
-        themeStyle = "主题风格", themeDefault = "默认 / Material3", themeHyperOS = "HyperOS 风格"
+        themeStyle = "主题风格", themeDefault = "Material3", themeHyperOS = "Miuix",
+        barStyle = "底栏风格", barStyleFloat = "悬浮", barStyleGlass = "Liquid Glass"
     )
 }
 
@@ -509,6 +547,17 @@ enum class Tab(val icon: ImageVector) {
     Inbox(Icons.Default.Email),
     History(Icons.Default.DateRange),
     Settings(Icons.Default.Settings)
+}
+
+// 底栏风格，仅在 Miuix 主题下可选。持久化使用稳定字符串 key；
+// fromKey 对未知值一律回退 Float（现有悬浮底栏），禁止直接 valueOf
+enum class BarStyle(val key: String) {
+    Float("float"),
+    LiquidGlass("liquid_glass");
+
+    companion object {
+        fun fromKey(key: String?): BarStyle = entries.find { it.key == key } ?: Float
+    }
 }
 
 data class EmailItem(
@@ -536,7 +585,8 @@ data class AppState(
     val isDarkMode: Boolean = false,
     val language: String = "zh",
     val autoCheckUpdate: Boolean = true,
-    val themeStyle: ThemeStyle = ThemeStyle.Material3
+    val themeStyle: ThemeStyle = ThemeStyle.Material3,
+    val barStyle: BarStyle = BarStyle.Float
 )
 
 private val disclaimerText = """
@@ -574,7 +624,16 @@ private val disclaimerText = """
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
+        // 默认的 auto() 会在 3 键导航（API 29+ 由系统绘制 scrim）与 API 26–28（直接使用
+        // DefaultLightScrim = #E6FFFFFF）上把导航栏刷成近白色，在悬浮底栏下方形成纯白长条。
+        // 显式传透明 scrim：light() 的 nightMode ≠ AUTO，可同时关闭系统强制对比。
+        // 导航栏图标明暗仍由下方 Compose 逻辑按应用内深色开关控制。
+        enableEdgeToEdge(
+            navigationBarStyle = SystemBarStyle.light(
+                android.graphics.Color.TRANSPARENT,
+                android.graphics.Color.TRANSPARENT
+            )
+        )
         setContent {
             val context = LocalContext.current
             val prefs = remember { context.getSharedPreferences("app", Context.MODE_PRIVATE) }
@@ -583,7 +642,8 @@ class MainActivity : ComponentActivity() {
                     language = prefs.getString("language", "zh") ?: "zh",
                     isDarkMode = prefs.getBoolean("isDarkMode", false),
                     autoCheckUpdate = prefs.getBoolean("autoCheckUpdate", true),
-                    themeStyle = ThemeStyle.fromKey(prefs.getString("themeStyle", ThemeStyle.Material3.key))
+                    themeStyle = ThemeStyle.fromKey(prefs.getString("themeStyle", ThemeStyle.Material3.key)),
+                    barStyle = BarStyle.fromKey(prefs.getString("barStyle", BarStyle.Float.key))
                 ))
             }
             val snackbar = remember { SnackbarHostState() }
@@ -736,7 +796,7 @@ class MainActivity : ComponentActivity() {
                         val j = JSONObject(body)
                         val tag = j.optString("tag_name", "").removePrefix("v").trim()
                         if (tag.isBlank()) {
-                            // 非 Release 响应（限流 403 / 拦截页 / API 变更），不能误报为"已是最新"
+                            // 非 Release 响应（限流 403 / 拦截页 / API 变更），不能误报为"已最新"
                             if (isManual) withContext(Dispatchers.Main) {
                                 scope.launch { snackbar.showSnackbar(s.updateFail) }
                             }
@@ -824,23 +884,146 @@ class MainActivity : ComponentActivity() {
             }
 
             TempMailTheme(darkTheme = state.isDarkMode, themeStyle = state.themeStyle) {
+                // 两套主题共用同一份页面内容，仅外层布局与底栏形态不同
+                val tabLabel: (Tab) -> String = { tab ->
+                    when (tab) {
+                        Tab.Inbox -> s.inbox
+                        Tab.History -> s.history
+                        Tab.Settings -> s.settings
+                    }
+                }
+                val disclaimerPage: @Composable (Modifier) -> Unit = { pageModifier ->
+                    Column(
+                        pageModifier.verticalScroll(rememberScrollState()),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Spacer(Modifier.height(24.dp))
+                        Text("免责声明", style = MaterialTheme.typography.headlineSmall)
+                        Spacer(Modifier.height(16.dp))
+                        Text(disclaimerText,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Spacer(Modifier.height(24.dp))
+                        Text(s.genderSelect, style = MaterialTheme.typography.titleMedium)
+                        Spacer(Modifier.height(4.dp))
+                        Text("你真的选对了吗?",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Spacer(Modifier.height(12.dp))
+                        val genders = listOf("male" to s.genderMale, "female" to s.genderFemale, "other" to s.genderOther)
+                        genders.forEach { (value, label) ->
+                            Row(
+                                Modifier.fillMaxWidth()
+                                    .clickable { selectedGender = value }
+                                    .clip(MaterialTheme.shapes.small)
+                                    .padding(vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                RadioButton(selected = selectedGender == value, onClick = { selectedGender = value })
+                                Spacer(Modifier.width(8.dp))
+                                Text(label, style = MaterialTheme.typography.bodyLarge)
+                            }
+                        }
+                        Spacer(Modifier.height(24.dp))
+                        Button(
+                            onClick = {
+                                if (selectedGender.isEmpty()) {
+                                    scope.launch { snackbar.showSnackbar(s.genderSelect) }
+                                } else if (selectedGender == "other") {
+                                    prefs.edit().putBoolean("disclaimer_accepted", true).apply()
+                                    showDisclaimer = false
+                                } else {
+                                    scope.launch { snackbar.showSnackbar(s.genderOccupied) }
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth().height(56.dp),
+                            shape = MaterialTheme.shapes.large,
+                            elevation = ButtonDefaults.buttonElevation(defaultElevation = 4.dp)
+                        ) {
+                            Icon(Icons.Default.Check, contentDescription = null)
+                            Spacer(Modifier.width(8.dp))
+                            Text("同意并进入")
+                        }
+                        Spacer(Modifier.height(32.dp))
+                    }
+                }
+                val tabPages: @Composable (PaddingValues) -> Unit = { contentPadding ->
+                    AnimatedContent(
+                        targetState = state.currentTab,
+                        transitionSpec = {
+                            val direction = if (targetState.ordinal > initialState.ordinal) 1 else -1
+                            (slideInHorizontally { it * direction } + fadeIn(tween(250)))
+                                .togetherWith(slideOutHorizontally { it * -direction } + fadeOut(tween(150)))
+                        },
+                        label = "tabContent"
+                    ) { tab ->
+                        when (tab) {
+                            Tab.Inbox -> InboxTab(contentPadding, state, snackbar, scope, context, s, client, poem, ::doRefresh) { updater ->
+                                state = updater(state)
+                            }
+                            Tab.History -> HistoryTab(contentPadding, state, s) { email ->
+                                val newHistory = if (state.email.isNotBlank() && state.email != email)
+                                    state.history + HistoryEmail(state.email, false)
+                                else state.history
+                                val filteredHistory = newHistory.filter { it.email != email }
+                                state = state.copy(
+                                    email = email,
+                                    count = 0,
+                                    rawMessages = emptyList(),
+                                    items = emptyList(),
+                                    history = filteredHistory
+                                )
+                            }
+                            Tab.Settings -> SettingsTab(contentPadding, state, s, snackbar, scope, client, onCheckUpdate = { manual -> checkUpdate(manual) }) { newState ->
+                                if (newState.language != state.language) {
+                                    prefs.edit().putString("language", newState.language).apply()
+                                }
+                                if (newState.isDarkMode != state.isDarkMode) {
+                                    prefs.edit().putBoolean("isDarkMode", newState.isDarkMode).apply()
+                                }
+                                if (newState.autoCheckUpdate != state.autoCheckUpdate) {
+                                    prefs.edit().putBoolean("autoCheckUpdate", newState.autoCheckUpdate).apply()
+                                }
+                                if (newState.themeStyle != state.themeStyle) {
+                                    prefs.edit().putString("themeStyle", newState.themeStyle.key).apply()
+                                }
+                                if (newState.barStyle != state.barStyle) {
+                                    prefs.edit().putString("barStyle", newState.barStyle.key).apply()
+                                }
+                                state = newState
+                            }
+                        }
+                    }
+                }
+
                 Scaffold(
                     snackbarHost = { SnackbarHost(snackbar) },
                     bottomBar = {
                         if (!showDisclaimer) {
-                            NavigationBar {
-                                Tab.entries.forEach { tab ->
-                                    NavigationBarItem(
-                                        selected = state.currentTab == tab,
-                                        onClick = { state = state.copy(currentTab = tab) },
-                                        icon = { Icon(tab.icon, when (tab) { Tab.Inbox -> s.inbox; Tab.History -> s.history; Tab.Settings -> s.settings }) },
-                                        label = {
-                                            Text(when (tab) {
-                                                Tab.Inbox -> s.inbox
-                                                Tab.History -> s.history
-                                                Tab.Settings -> s.settings
-                                            })
-                                        }
+                            if (state.themeStyle == ThemeStyle.Material3) {
+                                // Material3：原始默认样式（与底栏定制前完全一致）
+                                NavigationBar {
+                                    Tab.entries.forEach { tab ->
+                                        NavigationBarItem(
+                                            selected = state.currentTab == tab,
+                                            onClick = { state = state.copy(currentTab = tab) },
+                                            icon = { Icon(tab.icon, tabLabel(tab)) },
+                                            label = { Text(tabLabel(tab)) }
+                                        )
+                                    }
+                                }
+                            } else {
+                                // Miuix：底栏风格可选（Material3 主题不提供，保持原样）
+                                when (state.barStyle) {
+                                    BarStyle.LiquidGlass -> LiquidGlassBottomBar(
+                                        current = state.currentTab,
+                                        label = tabLabel,
+                                        onSelect = { state = state.copy(currentTab = it) }
+                                    )
+                                    BarStyle.Float -> MiuixFloatingBottomBar(
+                                        current = state.currentTab,
+                                        label = tabLabel,
+                                        onSelect = { state = state.copy(currentTab = it) }
                                     )
                                 }
                             }
@@ -848,108 +1031,11 @@ class MainActivity : ComponentActivity() {
                     }
                 ) { p ->
                     if (showDisclaimer) {
-                        Column(
-                            Modifier
-                                .fillMaxSize()
-                                .statusBarsPadding()
-                                .padding(p)
-                                .padding(horizontal = 24.dp)
-                                .verticalScroll(rememberScrollState()),
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                            Spacer(Modifier.height(24.dp))
-                            Text("免责声明", style = MaterialTheme.typography.headlineSmall)
-                            Spacer(Modifier.height(16.dp))
-                            Text(disclaimerText,
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            Spacer(Modifier.height(24.dp))
-                            Text(s.genderSelect, style = MaterialTheme.typography.titleMedium)
-                            Spacer(Modifier.height(4.dp))
-                            Text("你真的选对了吗?",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            Spacer(Modifier.height(12.dp))
-                            val genders = listOf("male" to s.genderMale, "female" to s.genderFemale, "other" to s.genderOther)
-                            genders.forEach { (value, label) ->
-                                Row(
-                                    Modifier.fillMaxWidth()
-                                        .clickable { selectedGender = value }
-                                        .clip(MaterialTheme.shapes.small)
-                                        .padding(vertical = 8.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    RadioButton(selected = selectedGender == value, onClick = { selectedGender = value })
-                                    Spacer(Modifier.width(8.dp))
-                                    Text(label, style = MaterialTheme.typography.bodyLarge)
-                                }
-                            }
-                            Spacer(Modifier.height(24.dp))
-                            Button(
-                                onClick = {
-                                    if (selectedGender.isEmpty()) {
-                                        scope.launch { snackbar.showSnackbar(s.genderSelect) }
-                                    } else if (selectedGender == "other") {
-                                        prefs.edit().putBoolean("disclaimer_accepted", true).apply()
-                                        showDisclaimer = false
-                                    } else {
-                                        scope.launch { snackbar.showSnackbar(s.genderOccupied) }
-                                    }
-                                },
-                                modifier = Modifier.fillMaxWidth().height(56.dp),
-                                shape = MaterialTheme.shapes.large,
-                                elevation = ButtonDefaults.buttonElevation(defaultElevation = 4.dp)
-                            ) {
-                                Icon(Icons.Default.Check, contentDescription = null)
-                                Spacer(Modifier.width(8.dp))
-                                Text("同意并进入")
-                            }
-                            Spacer(Modifier.height(32.dp))
-                        }
+                        disclaimerPage(
+                            Modifier.fillMaxSize().statusBarsPadding().padding(p).padding(horizontal = 24.dp)
+                        )
                     } else {
-                        AnimatedContent(
-                            targetState = state.currentTab,
-                            transitionSpec = {
-                                val direction = if (targetState.ordinal > initialState.ordinal) 1 else -1
-                                (slideInHorizontally { it * direction } + fadeIn(tween(250)))
-                                    .togetherWith(slideOutHorizontally { it * -direction } + fadeOut(tween(150)))
-                            },
-                            label = "tabContent"
-                        ) { tab ->
-                            when (tab) {
-                                Tab.Inbox -> InboxTab(p, state, snackbar, scope, context, s, client, poem, ::doRefresh) { updater ->
-                                    state = updater(state)
-                                }
-                                Tab.History -> HistoryTab(p, state, s) { email ->
-                                    val newHistory = if (state.email.isNotBlank() && state.email != email)
-                                        state.history + HistoryEmail(state.email, false)
-                                    else state.history
-                                    val filteredHistory = newHistory.filter { it.email != email }
-                                    state = state.copy(
-                                        email = email,
-                                        count = 0,
-                                        rawMessages = emptyList(),
-                                        items = emptyList(),
-                                        history = filteredHistory
-                                    )
-                                }
-                                Tab.Settings -> SettingsTab(p, state, s, snackbar, scope, client, onCheckUpdate = { manual -> checkUpdate(manual) }) { newState ->
-                                    if (newState.language != state.language) {
-                                        prefs.edit().putString("language", newState.language).apply()
-                                    }
-                                    if (newState.isDarkMode != state.isDarkMode) {
-                                        prefs.edit().putBoolean("isDarkMode", newState.isDarkMode).apply()
-                                    }
-                                    if (newState.autoCheckUpdate != state.autoCheckUpdate) {
-                                        prefs.edit().putBoolean("autoCheckUpdate", newState.autoCheckUpdate).apply()
-                                    }
-                                    if (newState.themeStyle != state.themeStyle) {
-                                        prefs.edit().putString("themeStyle", newState.themeStyle.key).apply()
-                                    }
-                                    state = newState
-                                }
-                            }
-                        }
+                        tabPages(p)
                     }
                 }
                 if (showUpdateDialog) {
@@ -999,6 +1085,212 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+}
+
+// ==================== Miuix 主题底栏（两种风格可选） ====================
+
+/**
+ * Miuix 悬浮底栏：既有样式，视觉与行为保持与定制前一致。
+ */
+@Composable
+private fun MiuixFloatingBottomBar(
+    current: Tab,
+    label: (Tab) -> String,
+    onSelect: (Tab) -> Unit
+) {
+    // 指示器必须用不透明色：M3 绘制时以 .copy(alpha = animationProgress)
+    // 覆盖该色的 alpha（选中稳定后为 1f），传入带透明度的颜色会被静默还原成实心色。
+    // 故按 12% 比例预先合成到容器色上，亮/暗模式均自动匹配底色。
+    val barColor = MaterialTheme.colorScheme.surfaceVariant
+    val indicatorColor = MaterialTheme.colorScheme.primary
+        .copy(alpha = 0.12f)
+        .compositeOver(barColor)
+    NavigationBar(
+        modifier = Modifier
+            .windowInsetsPadding(WindowInsets.navigationBars)
+            .padding(horizontal = 18.dp)
+            .padding(bottom = 12.dp)
+            .shadow(
+                elevation = 4.dp,
+                shape = RoundedCornerShape(28.dp),
+                clip = true
+            ),
+        containerColor = barColor,
+        tonalElevation = 0.dp,
+        windowInsets = WindowInsets(0.dp),
+        content = {
+            Tab.entries.forEach { tab ->
+                val selected = current == tab
+                NavigationBarItem(
+                    selected = selected,
+                    onClick = { onSelect(tab) },
+                    icon = {
+                        Icon(
+                            tab.icon,
+                            label(tab),
+                            tint = if (selected) MaterialTheme.colorScheme.primary
+                                   else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    },
+                    label = {
+                        Text(
+                            label(tab),
+                            color = if (selected) MaterialTheme.colorScheme.primary
+                                    else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    },
+                    colors = NavigationBarItemDefaults.colors(
+                        indicatorColor = indicatorColor
+                    )
+                )
+            }
+        }
+    )
+}
+
+/**
+ * 液态玻璃底栏：视觉与交互规格参考 skill-liquid-glass
+ * （玻璃本体 + 高光描边 + 外层柔和阴影 + 滑动指示器 + 按压缩放回弹），
+ * 以本项目现有 Compose 栈实现，不引入任何新依赖。
+ *
+ * 注：该 skill 的「模糊 / 折射」依赖 Compose 1.7+ 的图层捕获与 API 33 的 RuntimeShader，
+ * 在本项目 Compose 1.5.4 + minSdk 24 的约束下无法承载，故此处实现其可移植的玻璃质感层次。
+ */
+@SuppressLint("UnusedBoxWithConstraintsScope")
+@Composable
+private fun LiquidGlassBottomBar(
+    current: Tab,
+    label: (Tab) -> String,
+    onSelect: (Tab) -> Unit
+) {
+    val scheme = MaterialTheme.colorScheme
+    val tabs = Tab.entries
+    val glassShape = RoundedCornerShape(28.dp)
+    // 玻璃层次：不透明基底之上叠一层极淡的纵向明暗（顶部受光、底部压暗），形成厚度。
+    // 基底必须不透明 —— 否则 10dp 阴影会从半透明本体下方透出，把底栏越往底部压得越灰。
+    val bodyBrush = Brush.verticalGradient(
+        listOf(
+            Color.White.copy(alpha = 0.10f),
+            Color.Transparent,
+            Color.Black.copy(alpha = 0.05f)
+        )
+    )
+    // 高光描边：左上来光最亮，过渡到极淡的主色收边
+    val edgeBrush = Brush.linearGradient(
+        listOf(
+            Color.White.copy(alpha = 0.70f),
+            Color.White.copy(alpha = 0.10f),
+            scheme.primary.copy(alpha = 0.22f)
+        )
+    )
+    // 指示器由本组件自行绘制（不经过 M3 NavigationBar），故可直接使用半透明色，
+    // 预合成到基底色上以保证在深浅两种背景下都有足够存在感
+    val indicatorColor = scheme.primary.copy(alpha = 0.16f)
+        .compositeOver(scheme.surface)
+    Box(
+        modifier = Modifier
+            .windowInsetsPadding(WindowInsets.navigationBars)
+            .padding(horizontal = 18.dp)
+            .padding(bottom = 12.dp)
+            .fillMaxWidth()
+            .height(64.dp)
+    ) {
+        // 阴影层：不透明底色承载投影，使阴影只出现在圆角轮廓之外
+        Box(
+            Modifier
+                .matchParentSize()
+                .shadow(elevation = 10.dp, shape = glassShape, clip = true)
+                .background(scheme.surface, glassShape)
+        )
+        BoxWithConstraints(
+            Modifier
+                .matchParentSize()
+                .background(bodyBrush, glassShape)
+                .border(1.dp, edgeBrush, glassShape)
+        ) {
+            val itemWidth = maxWidth / tabs.size
+            val indicatorWidth = minOf(64.dp, itemWidth - 8.dp)
+            val index = tabs.indexOf(current).coerceAtLeast(0)
+            val rtl = LocalLayoutDirection.current == LayoutDirection.Rtl
+            val slot = if (rtl) tabs.size - 1 - index else index
+            val indicatorX by animateDpAsState(
+                targetValue = itemWidth * slot + (itemWidth - indicatorWidth) / 2,
+                animationSpec = spring(dampingRatio = 0.78f, stiffness = Spring.StiffnessMediumLow),
+                label = "glassIndicatorX"
+            )
+            // 滑动指示器：绘制在图标之下
+            Box(
+                Modifier
+                    .offset(x = indicatorX, y = 8.dp)
+                    .size(indicatorWidth, 32.dp)
+                    .background(indicatorColor, RoundedCornerShape(percent = 50))
+            )
+            // 顶部受光已由 bodyBrush 的渐变承担，此处不再叠加内高光
+            Row(
+                Modifier.fillMaxSize().selectableGroup(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                tabs.forEach { tab ->
+                    GlassTabItem(
+                        modifier = Modifier.weight(1f),
+                        tab = tab,
+                        selected = current == tab,
+                        label = label(tab),
+                        onClick = { onSelect(tab) }
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun GlassTabItem(
+    modifier: Modifier,
+    tab: Tab,
+    selected: Boolean,
+    label: String,
+    onClick: () -> Unit
+) {
+    val scheme = MaterialTheme.colorScheme
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    // 按压回弹：按下收缩、松开弹回，模拟玻璃被按压的液体反馈
+    val scale by animateFloatAsState(
+        targetValue = if (pressed) 0.86f else 1f,
+        animationSpec = spring(dampingRatio = 0.42f, stiffness = Spring.StiffnessMedium),
+        label = "glassPressScale"
+    )
+    Column(
+        modifier = modifier
+            .fillMaxHeight()
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            }
+            .selectable(
+                selected = selected,
+                interactionSource = interaction,
+                indication = null,
+                role = Role.Tab,
+                onClick = onClick
+            ),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Icon(
+            tab.icon,
+            contentDescription = null,
+            modifier = Modifier.size(24.dp),
+            tint = if (selected) scheme.primary else scheme.onSurfaceVariant
+        )
+        Spacer(Modifier.height(2.dp))
+        Text(
+            label,
+            style = MaterialTheme.typography.labelSmall,
+            color = if (selected) scheme.primary else scheme.onSurfaceVariant
+        )
     }
 }
 
@@ -1414,7 +1706,7 @@ private fun HistoryTab(
     }
 }
 
-private enum class SettingsPage { Main, Language, DarkMode, Theme, About, Author }
+private enum class SettingsPage { Main, Language, DarkMode, Theme, BarStyle, About, Author }
 
 @Composable
 private fun SettingsTab(
@@ -1470,6 +1762,15 @@ private fun SettingsTab(
                                         value = if (state.themeStyle == ThemeStyle.HyperOS) s.themeHyperOS else s.themeDefault,
                                         onClick = { page = SettingsPage.Theme }
                                     )
+                                    // 底栏风格仅在 Miuix 主题下提供，Material3 主题保持原样
+                                    if (state.themeStyle == ThemeStyle.HyperOS) {
+                                        Divider(modifier = Modifier.padding(horizontal = 16.dp))
+                                        SettingsItem(
+                                            label = s.barStyle,
+                                            value = if (state.barStyle == BarStyle.LiquidGlass) s.barStyleGlass else s.barStyleFloat,
+                                            onClick = { page = SettingsPage.BarStyle }
+                                        )
+                                    }
                             Divider(modifier = Modifier.padding(horizontal = 16.dp))
                             SettingsItem(
                                 label = s.about,
@@ -1560,6 +1861,25 @@ private fun SettingsTab(
                                     Divider(modifier = Modifier.padding(horizontal = 16.dp))
                                     LanguageOption(s.themeHyperOS, state.themeStyle == ThemeStyle.HyperOS,
                                         onClick = { onState(state.copy(themeStyle = ThemeStyle.HyperOS)); page = SettingsPage.Main })
+                                }
+                            }
+                        }
+
+                        SettingsPage.BarStyle -> {
+                            IconButton(onClick = { page = SettingsPage.Main }) {
+                                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = s.back)
+                            }
+                            Spacer(Modifier.height(8.dp))
+                            Text(s.barStyle, style = MaterialTheme.typography.headlineSmall)
+                            Spacer(Modifier.height(20.dp))
+
+                            Card(Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.large) {
+                                Column {
+                                    LanguageOption(s.barStyleFloat, state.barStyle == BarStyle.Float,
+                                        onClick = { onState(state.copy(barStyle = BarStyle.Float)); page = SettingsPage.Main })
+                                    Divider(modifier = Modifier.padding(horizontal = 16.dp))
+                                    LanguageOption(s.barStyleGlass, state.barStyle == BarStyle.LiquidGlass,
+                                        onClick = { onState(state.copy(barStyle = BarStyle.LiquidGlass)); page = SettingsPage.Main })
                                 }
                             }
                         }
@@ -1993,6 +2313,7 @@ private fun appStateToJson(state: AppState): String {
     j.put("isDarkMode", state.isDarkMode)
     j.put("autoCheckUpdate", state.autoCheckUpdate)
     j.put("themeStyle", state.themeStyle.key)
+    j.put("barStyle", state.barStyle.key)
     j.put("tab", state.currentTab.ordinal)
     // items 限制条数、正文截断、且不保存 htmlBody（完整 HTML 动辄数十 KB），
     // 防止写入 Bundle 越过 Binder 事务上限导致 TransactionTooLargeException
@@ -2062,7 +2383,8 @@ private fun appStateFromJson(json: String): AppState? {
             isDarkMode = j.optBoolean("isDarkMode", false),
             language = j.optString("language", "zh"),
             autoCheckUpdate = j.optBoolean("autoCheckUpdate", true),
-            themeStyle = ThemeStyle.fromKey(j.optString("themeStyle", ThemeStyle.Material3.key))
+            themeStyle = ThemeStyle.fromKey(j.optString("themeStyle", ThemeStyle.Material3.key)),
+            barStyle = BarStyle.fromKey(j.optString("barStyle", BarStyle.Float.key))
         )
     } catch (e: Exception) {
         null

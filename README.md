@@ -118,6 +118,8 @@ release { isMinifyEnabled = true; isShrinkResources = true }
 |------|------|
 | 语言 | 支持 15 种语言：中文、English、日本語、한국어、Français、Deutsch、Español、Português、Русский、Italiano、العربية、हिन्दी、Tiếng Việt、ไทย、Bahasa Indonesia |
 | 深色模式 | 开关切换亮色/深色主题，实时生效 |
+| 主题风格 | `Material3`（默认）与 `Miuix` 两套主题一键切换，Material3 表现与定制前完全一致 |
+| 底栏风格 | 仅 Miuix 主题下提供：`悬浮`（默认，轻量悬浮底栏）与 `Liquid Glass`（液态玻璃底栏，玻璃质感 + 滑动指示器 + 按压回弹） |
 | 检查更新 | 手动触发 GitHub Releases 检查 |
 | 自动检查 | 启动时自动检查更新，可通过开关关闭 |
 | 关于 | 应用简介 |
