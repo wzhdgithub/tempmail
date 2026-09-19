@@ -1,15 +1,20 @@
 package com.tempmail.app
 
 import android.annotation.SuppressLint
+import android.app.Activity
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.util.Log
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.os.Message
+import android.provider.Settings
+import android.text.Html
 import android.webkit.WebChromeClient
+import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.activity.ComponentActivity
@@ -77,6 +82,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
+import androidx.core.view.WindowCompat
 import com.tempmail.app.ui.glass.GlassBarItem
 import com.tempmail.app.ui.glass.GlassBarSpace
 import com.tempmail.app.ui.glass.GlassShell
@@ -85,15 +91,22 @@ import com.tempmail.app.ui.theme.TempMailTheme
 import com.tempmail.app.ui.theme.ThemeStyle
 import com.tempmail.app.ui.theme.themedCornerShape
 import com.tempmail.app.ui.theme.themedSwitchColors
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import okhttp3.Call
 import kotlin.random.Random
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.json.JSONArray
 import org.json.JSONObject
+import java.io.File
+import java.security.MessageDigest
+import java.text.SimpleDateFormat
+import java.util.Locale
+import java.util.TimeZone
 import java.util.concurrent.TimeUnit
 
 private data class Language(val code: String, val label: String)
@@ -641,7 +654,7 @@ class MainActivity : ComponentActivity() {
         )
         setContent {
             val context = LocalContext.current
-            val prefs = remember { context.getSharedPreferences("app", Context.MODE_PRIVATE) }
+            val prefs = remember { context.getSharedPreferences("app", MODE_PRIVATE) }
             var state by rememberSaveable(stateSaver = AppStateSaver) {
                 mutableStateOf(AppState(
                     language = prefs.getString("language", "zh") ?: "zh",
@@ -658,8 +671,8 @@ class MainActivity : ComponentActivity() {
             // 应用内深色开关与系统夜间模式相互独立，状态栏/导航栏图标颜色需跟随应用主题
             val view = LocalView.current
             LaunchedEffect(state.isDarkMode) {
-                val window = (view.context as? android.app.Activity)?.window ?: return@LaunchedEffect
-                androidx.core.view.WindowCompat.getInsetsController(window, view).apply {
+                val window = (view.context as? Activity)?.window ?: return@LaunchedEffect
+                WindowCompat.getInsetsController(window, view).apply {
                     isAppearanceLightStatusBars = !state.isDarkMode
                     isAppearanceLightNavigationBars = !state.isDarkMode
                 }
@@ -692,7 +705,7 @@ class MainActivity : ComponentActivity() {
                 retryDownload = true
             }
 
-            var downloadCall by remember { mutableStateOf<okhttp3.Call?>(null) }
+            var downloadCall by remember { mutableStateOf<Call?>(null) }
 
             fun downloadInstall(url: String, expectedSha256: String) {
                 if (expectedSha256.isBlank()) {
@@ -700,9 +713,9 @@ class MainActivity : ComponentActivity() {
                     scope.launch { snackbar.showSnackbar(s.updateFail) }
                     return
                 }
-                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                     if (!context.packageManager.canRequestPackageInstalls()) {
-                        val intent = Intent(android.provider.Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES).apply {
+                        val intent = Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES).apply {
                             data = Uri.parse("package:${context.packageName}")
                         }
                         installPermissionLauncher.launch(intent)
@@ -712,7 +725,7 @@ class MainActivity : ComponentActivity() {
                 showDownloadProgress = true
                 downloadProgress = 0
                 scope.launch(Dispatchers.IO) {
-                    var file: java.io.File? = null
+                    var file: File? = null
                     try {
                         val base = context.getExternalFilesDir(null)
                         if (base == null) {
@@ -722,9 +735,9 @@ class MainActivity : ComponentActivity() {
                             }
                             return@launch
                         }
-                        val dir = java.io.File(base, "updates")
+                        val dir = File(base, "updates")
                         dir.mkdirs()
-                        val f = java.io.File(dir, "app-release.apk")
+                        val f = File(dir, "app-release.apk")
                         file = f
                         val dl = Request.Builder().url(url).get().build()
                         val call = client.newCall(dl)
@@ -732,7 +745,7 @@ class MainActivity : ComponentActivity() {
                         val resp = call.execute()
                         val total = resp.body?.contentLength() ?: -1L
                         val source = resp.body?.byteStream() ?: return@launch
-                        val md = java.security.MessageDigest.getInstance("SHA-256")
+                        val md = MessageDigest.getInstance("SHA-256")
                         f.outputStream().use { out ->
                             val buf = ByteArray(8192)
                             var read: Int
@@ -807,7 +820,7 @@ class MainActivity : ComponentActivity() {
                             }
                             return@launch
                         }
-                        val cur = com.tempmail.app.BuildConfig.VERSION_NAME
+                        val cur = BuildConfig.VERSION_NAME
                         if (versionCompare(tag, cur) <= 0) {
                             if (isManual) withContext(Dispatchers.Main) {
                                 scope.launch { snackbar.showSnackbar(s.alreadyLatest) }
@@ -883,7 +896,7 @@ class MainActivity : ComponentActivity() {
             LaunchedEffect(Unit) {
                 withContext(Dispatchers.IO) {
                     try {
-                        java.io.File(context.getExternalFilesDir(null), "updates/app-release.apk").delete()
+                        File(context.getExternalFilesDir(null), "updates/app-release.apk").delete()
                     } catch (_: Exception) { }
                 }
             }
@@ -1105,6 +1118,12 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
+
+    private fun ColumnScope.LinearProgressIndicator(
+        progress: () -> Float,
+        modifier: Modifier
+    ) {
+    }
 }
 
 // ==================== Miuix 主题底栏（两种风格可选） ====================
@@ -1319,7 +1338,7 @@ private fun InboxTab(
     bottomOverlap: Dp,
     state: AppState,
     snackbar: SnackbarHostState,
-    scope: kotlinx.coroutines.CoroutineScope,
+    scope: CoroutineScope,
     context: Context,
     s: Strings,
     client: OkHttpClient,
@@ -1506,7 +1525,9 @@ private fun InboxTab(
                             color = MaterialTheme.colorScheme.onSurfaceVariant)
                         if (item.body.isNotBlank()) {
                             Spacer(Modifier.height(8.dp))
-                            HorizontalDivider()
+                            HorizontalDivider(
+                                modifier = TODO()
+                            )
                             Spacer(Modifier.height(8.dp))
                             Text(item.body,
                                 style = MaterialTheme.typography.bodySmall.copy(
@@ -1574,7 +1595,7 @@ private fun InboxTab(
                                             webViewClient = object : WebViewClient() {
                                                 override fun shouldOverrideUrlLoading(
                                                     v: WebView?,
-                                                    r: android.webkit.WebResourceRequest?
+                                                    r: WebResourceRequest?
                                                 ): Boolean {
                                                     openMailLink(v, r?.url)
                                                     v?.destroy()
@@ -1597,7 +1618,7 @@ private fun InboxTab(
                                 webViewClient = object : WebViewClient() {
                                     override fun shouldOverrideUrlLoading(
                                         view: WebView?,
-                                        request: android.webkit.WebResourceRequest?
+                                        request: WebResourceRequest?
                                     ): Boolean {
                                         Log.d("MAIL_LINK", "override request: ${request?.url}")
                                         openMailLink(view, request?.url)
@@ -1740,7 +1761,7 @@ private fun SettingsTab(
     state: AppState,
     s: Strings,
     snackbar: SnackbarHostState,
-    scope: kotlinx.coroutines.CoroutineScope,
+    scope: CoroutineScope,
     client: OkHttpClient,
     onCheckUpdate: (Boolean) -> Unit,
     onState: (AppState) -> Unit
@@ -1965,7 +1986,9 @@ private fun SettingsTab(
                                         Uri.parse("https://wzhblog6.pwapi.cn/")))
                                 })
                             Spacer(Modifier.height(12.dp))
-                            HorizontalDivider()
+                            HorizontalDivider(
+                                modifier = TODO()
+                            )
                             Spacer(Modifier.height(12.dp))
                             Text("Email", style = MaterialTheme.typography.labelLarge)
                             Spacer(Modifier.height(4.dp))
@@ -1986,13 +2009,18 @@ private fun SettingsTab(
             if (bottomOverlap > 0.dp) Spacer(Modifier.height(bottomOverlap))
         }
         if (page == SettingsPage.Main) {
-            Text("${s.version} ${com.tempmail.app.BuildConfig.VERSION_NAME}",
+            Text("${s.version} ${BuildConfig.VERSION_NAME}",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.align(Alignment.CenterHorizontally)
                     .padding(bottom = 8.dp + bottomOverlap))
         }
     }
+}
+
+@Composable
+fun HorizontalDivider(modifier: Modifier) {
+    TODO("Not yet implemented")
 }
 
 @Composable
@@ -2258,7 +2286,7 @@ private fun versionCompare(a: String, b: String): Int {
 }
 
 private fun stripHtml(html: String): String {
-    return android.text.Html.fromHtml(html, android.text.Html.FROM_HTML_MODE_LEGACY)
+    return Html.fromHtml(html, Html.FROM_HTML_MODE_LEGACY)
         .toString().trim()
 }
 
@@ -2318,10 +2346,10 @@ private fun parseEmailTime(time: String): Long {
     )
     for (f in formats) {
         try {
-            val sdf = java.text.SimpleDateFormat(f, java.util.Locale.US)
+            val sdf = SimpleDateFormat(f, Locale.US)
             sdf.isLenient = false
             if (f.endsWith("'Z'") || f.endsWith("XXX")) {
-                sdf.timeZone = java.util.TimeZone.getTimeZone("UTC")
+                sdf.timeZone = TimeZone.getTimeZone("UTC")
             }
             val d = sdf.parse(t)
             if (d != null) return d.time

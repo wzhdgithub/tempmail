@@ -1,16 +1,11 @@
 package com.tempmail.app.ui.glass
 
 import android.os.Build
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.EaseOut
 import androidx.compose.animation.core.spring
-import androidx.compose.foundation.background
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -20,40 +15,78 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.CornerBasedShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.State
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.GraphicsLayerScope
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.util.fastCoerceAtMost
+import androidx.compose.ui.util.fastCoerceIn
+import androidx.compose.ui.util.lerp
+import kotlinx.coroutines.launch
+import top.yukonga.miuix.kmp.blur.Backdrop
 import top.yukonga.miuix.kmp.blur.BackdropEffectScope
 import top.yukonga.miuix.kmp.blur.LayerBackdrop
 import top.yukonga.miuix.kmp.blur.blur
 import top.yukonga.miuix.kmp.blur.colorControls
 import top.yukonga.miuix.kmp.blur.drawBackdrop
+import top.yukonga.miuix.kmp.blur.highlight.BloomStroke
 import top.yukonga.miuix.kmp.blur.highlight.Highlight
+import top.yukonga.miuix.kmp.blur.highlight.LightPosition
+import top.yukonga.miuix.kmp.blur.highlight.LightSource
 import top.yukonga.miuix.kmp.blur.isRuntimeShaderSupported
 import top.yukonga.miuix.kmp.blur.layerBackdrop
 import top.yukonga.miuix.kmp.blur.rememberLayerBackdrop
 import top.yukonga.miuix.kmp.blur.runtimeShaderEffect
+import top.yukonga.miuix.kmp.blur.sensor.rememberDeviceTilt
+import kotlin.math.PI
+import kotlin.math.abs
+import kotlin.math.atan2
+import kotlin.math.cos
+import kotlin.math.roundToInt
+import kotlin.math.sign
+import kotlin.math.sin
 
 // ==================== 真·液态玻璃底栏（KernelSU 同款实现路径） ====================
 //
@@ -61,7 +94,11 @@ import top.yukonga.miuix.kmp.blur.runtimeShaderEffect
 //   1. 内容整屏绘制并挂到 LayerBackdrop 图层（Modifier.layerBackdrop）；
 //   2. 底栏浮在内容之上，用 Modifier.drawBackdrop 采样该图层，做
 //      模糊（blur）+ 饱和度增强（vibrancy）+ 边缘折射（lens）+ 高光描边（highlight）；
-//   3. 底栏自身不再有伪玻璃的渐变/不透明底，内容可滚动到底栏下方并被真实折射。
+//   3. 选中胶囊同样由 drawBackdrop 绘制：它采样「应用内容 + 图标层副本」的合成
+//      backdrop（CombinedBackdrop），按住时透镜折射放大图标并带色散，形成
+//      iOS 液态玻璃的「放大镜」按压反馈；
+//   4. 支持按住拖动切换 Tab（DampedDragAnimation）、越界橡皮筋、按压光斑
+//      （InteractiveHighlight）与随重力方向旋转的镜面高光。
 //
 // 该路径依赖 API 33 的 RuntimeShader，miuix-blur 因此声明 minSdk 33
 // （已在 AndroidManifest 用 tools:overrideLibrary 放行）。本文件所有 miuix-blur
@@ -77,6 +114,36 @@ val GlassBarSpace = 88.dp
 fun isGlassBlurSupported(): Boolean = Build.VERSION.SDK_INT >= 33
 
 data class GlassBarItem(val icon: ImageVector, val label: String)
+
+/** 图标层副本的缩放（按压时被胶囊透镜放大）；用 lambda 供绘制阶段读取，避免重组。 */
+private val LocalGlassBarTabScale = staticCompositionLocalOf { { 1f } }
+
+/** iOS 风格镜面高光：双向加色辉光描边，光源方向随重力旋转。 */
+private val GlassSpecular: Highlight = Highlight(
+    width = 1.dp,
+    alpha = 1f,
+    style = BloomStroke(
+        color = Color.White.copy(alpha = 0.12f),
+        innerBlurRadius = 2.0.dp,
+        primaryLight = LightSource(
+            position = LightPosition(0.5f, -0.3f, -0.05f),
+            color = Color.White,
+            intensity = 1f
+        ),
+        secondaryLight = LightSource(
+            position = LightPosition(0.5f, 0.8f, -0.5f),
+            color = Color.White,
+            intensity = 0.4f
+        ),
+        dualPeak = true
+    )
+)
+
+// 与 miuix-blur HighlightStyle 的 LIGHT_REF 保持一致
+private const val LIGHT_REF_X = 0.5f
+private const val LIGHT_REF_Y = 0.7f
+private const val GRAVITY_DIR_THRESHOLD_SQ = 0.01f // |g_xy| > 0.1，约 6° 倾斜
+private const val GRAVITY_ANGLE_STEP_RAD = (3.0 * PI / 180.0).toFloat()
 
 /**
  * 液态玻璃外壳：玻璃模式下内容铺满整屏并挂载 backdrop 图层，底栏浮于其上；
@@ -134,28 +201,144 @@ private fun GlassBar(
     onSelect: (Int) -> Unit
 ) {
     val scheme = MaterialTheme.colorScheme
+    val glassShape = GlassBarShape
+    val pillShape = remember { CircleShape }
+    val accentColor = scheme.primary
+    val tabContentColor = scheme.onSurfaceVariant
     // 玻璃涂层：半透明底色叠在模糊之上，形成牛奶玻璃质感
     val containerColor = scheme.surface.copy(alpha = 0.35f)
+
+    val tabsBackdrop = rememberLayerBackdrop()
+    val density = LocalDensity.current
+    val isLtr = LocalLayoutDirection.current == LayoutDirection.Ltr
+    val animationScope = rememberCoroutineScope()
+    val tabsCount = items.size
+
+    var tabWidthPx by remember { mutableFloatStateOf(0f) }
+    var totalWidthPx by remember { mutableFloatStateOf(0f) }
+
+    val offsetAnimation = remember { Animatable(0f) }
+    val rubberBandPx = with(density) { 4.dp.toPx() }
+    // 拖到两端之外时的橡皮筋位移：越界越多位移越小
+    val panelOffset by remember(rubberBandPx) {
+        derivedStateOf {
+            if (totalWidthPx == 0f) {
+                0f
+            } else {
+                val fraction = (offsetAnimation.value / totalWidthPx).fastCoerceIn(-1f, 1f)
+                rubberBandPx * fraction.sign * EaseOut.transform(abs(fraction))
+            }
+        }
+    }
+
+    var currentIndex by remember { mutableIntStateOf(selectedIndex) }
+    val onSelectedUpdated by rememberUpdatedState(onSelect)
+
+    fun indexAt(positionX: Float): Int {
+        if (tabWidthPx == 0f) return currentIndex
+        val horizontalPaddingPx = with(density) { 4.dp.toPx() }
+        val logicalX = if (isLtr) positionX else totalWidthPx - positionX
+        return ((logicalX - horizontalPaddingPx) / tabWidthPx)
+            .toInt()
+            .coerceIn(0, tabsCount - 1)
+    }
+
+    val dampedDragAnimation = remember(animationScope, tabsCount, density, isLtr) {
+        DampedDragAnimation(
+            animationScope = animationScope,
+            initialValue = selectedIndex.toFloat(),
+            valueRange = 0f..(tabsCount - 1).toFloat(),
+            visibilityThreshold = 0.001f,
+            initialScale = 1f,
+            pressedScale = 78f / 56f,
+            canDrag = { offset -> offset.x in 0f..totalWidthPx },
+            onDragStarted = { position -> updateValue(indexAt(position.x).toFloat()) },
+            onDragStopped = {
+                val targetIndex = targetValue.roundToInt().coerceIn(0, tabsCount - 1)
+                if (currentIndex != targetIndex) {
+                    currentIndex = targetIndex
+                    onSelectedUpdated(targetIndex)
+                }
+                updateValue(targetIndex.toFloat())
+                animationScope.launch {
+                    offsetAnimation.animateTo(0f, spring(1f, 300f, 0.5f))
+                }
+            },
+            onDragCancelled = {
+                updateValue(currentIndex.toFloat())
+                animationScope.launch {
+                    offsetAnimation.animateTo(0f, spring(1f, 300f, 0.5f))
+                }
+            },
+            onDrag = { _, dragAmount ->
+                if (tabWidthPx > 0f && dragAmount.x != 0f) {
+                    updateValue(
+                        (targetValue + dragAmount.x / tabWidthPx * if (isLtr) 1f else -1f)
+                            .coerceIn(0f, (tabsCount - 1).toFloat())
+                    )
+                    animationScope.launch {
+                        offsetAnimation.snapTo(offsetAnimation.value + dragAmount.x)
+                    }
+                }
+            }
+        )
+    }
+
+    LaunchedEffect(selectedIndex) {
+        if (currentIndex != selectedIndex) {
+            currentIndex = selectedIndex
+            dampedDragAnimation.animateToValue(selectedIndex.toFloat())
+        }
+    }
+
+    fun activateTab(index: Int) {
+        if (index !in 0 until tabsCount) return
+        if (currentIndex != index) {
+            currentIndex = index
+            onSelectedUpdated(index)
+        }
+        dampedDragAnimation.animateToValue(index.toFloat())
+    }
+
+    val interactiveHighlight = remember(animationScope, tabWidthPx, dampedDragAnimation) {
+        InteractiveHighlight(
+            animationScope = animationScope,
+            position = { size, _ ->
+                Offset(
+                    if (isLtr) (dampedDragAnimation.value + 0.5f) * tabWidthPx + panelOffset
+                    else size.width - (dampedDragAnimation.value + 0.5f) * tabWidthPx + panelOffset,
+                    size.height / 2f
+                )
+            }
+        )
+    }
+
+    val baseHighlight = rememberGravityRotatedHighlight(GlassSpecular, extraDegrees = -45f)
+    val pillHighlight = rememberGravityRotatedHighlight(GlassSpecular, extraDegrees = 90f)
+    // 选中胶囊需同时折射「应用内容」与「图标层」，故合并两个 backdrop
+    val combinedBackdrop = rememberCombinedBackdrop(backdrop, tabsBackdrop)
+
     Box(
-        modifier
+        modifier = modifier
             .windowInsetsPadding(WindowInsets.navigationBars)
             .padding(horizontal = 18.dp)
             .padding(bottom = 12.dp)
-            .fillMaxWidth()
-            .height(64.dp)
+            .fillMaxWidth(),
+        contentAlignment = Alignment.CenterStart
     ) {
-        // 投影层：只画阴影、不填充底色，否则会盖住玻璃下的模糊
-        Box(
+        Row(
             Modifier
-                .matchParentSize()
-                .shadow(elevation = 12.dp, shape = GlassBarShape, clip = false)
-        )
-        BoxWithConstraints(
-            Modifier
-                .matchParentSize()
+                .onGloballyPositioned { coords ->
+                    totalWidthPx = coords.size.width.toFloat()
+                    val contentWidthPx = totalWidthPx - with(density) { 8.dp.toPx() }
+                    tabWidthPx = (contentWidthPx / tabsCount).coerceAtLeast(0f)
+                }
+                .selectableGroup()
+                .graphicsLayer { translationX = panelOffset }
+                .shadow(elevation = 12.dp, shape = glassShape, clip = false)
                 .drawBackdrop(
                     backdrop = backdrop,
-                    shape = { GlassBarShape },
+                    shape = { glassShape },
                     effects = {
                         padding = maxOf(padding, 40.dp.toPx())
                         vibrancy()
@@ -165,90 +348,245 @@ private fun GlassBar(
                             refractionAmount = 24.dp.toPx()
                         )
                     },
-                    highlight = {
-                        if (darkTheme) Highlight.GlassStrokeMiddleDark
-                        else Highlight.GlassStrokeMiddleLight
+                    highlight = { baseHighlight.value.copy(alpha = 0.75f) },
+                    layerBlock = {
+                        // 按压时玻璃本体微微鼓起
+                        val width = size.width.coerceAtLeast(1f)
+                        val s = lerp(1f, 1f + 16.dp.toPx() / width, dampedDragAnimation.pressProgress)
+                        scaleX = s
+                        scaleY = s
                     },
                     onDrawSurface = { drawRect(containerColor) }
                 )
+                .then(interactiveHighlight.modifier)
+                .then(interactiveHighlight.gestureModifier)
+                .then(dampedDragAnimation.modifier)
+                .height(64.dp)
+                .padding(4.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            val itemWidth = maxWidth / items.size
-            val indicatorWidth = minOf(64.dp, itemWidth - 8.dp)
-            val index = selectedIndex.coerceIn(0, items.lastIndex)
-            val rtl = LocalLayoutDirection.current == LayoutDirection.Rtl
-            val slot = if (rtl) items.size - 1 - index else index
-            val indicatorX by animateDpAsState(
-                targetValue = itemWidth * slot + (itemWidth - indicatorWidth) / 2,
-                animationSpec = spring(dampingRatio = 0.78f, stiffness = Spring.StiffnessMediumLow),
-                label = "glassIndicatorX"
-            )
-            Box(
-                Modifier
-                    .offset(x = indicatorX, y = 8.dp)
-                    .size(indicatorWidth, 32.dp)
-                    .background(scheme.primary.copy(alpha = 0.16f), RoundedCornerShape(percent = 50))
-            )
-            Row(
-                Modifier.fillMaxSize().selectableGroup(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                items.forEachIndexed { i, item ->
-                    GlassBarTab(
+            items.forEachIndexed { i, item ->
+                CompositionLocalProvider(
+                    LocalContentColor provides if (i == currentIndex) accentColor else tabContentColor
+                ) {
+                    GlassBarTabItem(
                         modifier = Modifier.weight(1f),
                         item = item,
-                        selected = i == index,
-                        onClick = { onSelect(i) }
+                        selected = i == currentIndex,
+                        onClick = { activateTab(i) }
                     )
                 }
             }
+        }
+
+        // 图标层副本（alpha 0，仅被 tabsBackdrop 记录）：按住时被胶囊透镜放大并染成主色
+        CompositionLocalProvider(
+            LocalGlassBarTabScale provides {
+                lerp(1f, 1.2f, dampedDragAnimation.pressProgress)
+            },
+            LocalContentColor provides accentColor
+        ) {
+            Row(
+                Modifier
+                    .clearAndSetSemantics { }
+                    .alpha(0f)
+                    .layerBackdrop(tabsBackdrop)
+                    .graphicsLayer { translationX = panelOffset }
+                    .drawBackdrop(
+                        backdrop = backdrop,
+                        shape = { glassShape },
+                        effects = {
+                            padding = maxOf(padding, 40.dp.toPx())
+                            vibrancy()
+                            blur(4.dp.toPx(), 4.dp.toPx())
+                            lens(
+                                refractionHeight = 24.dp.toPx(),
+                                refractionAmount = 24.dp.toPx()
+                            )
+                        },
+                        onDrawSurface = { drawRect(containerColor) }
+                    )
+                    .then(interactiveHighlight.modifier)
+                    .height(56.dp)
+                    .padding(horizontal = 4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                items.forEachIndexed { i, item ->
+                    GlassBarTabItem(
+                        modifier = Modifier.weight(1f),
+                        item = item,
+                        selected = i == currentIndex,
+                        onClick = { activateTab(i) }
+                    )
+                }
+            }
+        }
+
+        if (tabWidthPx > 0f) {
+            val tabWidthDp = with(density) { tabWidthPx.toDp() }
+            Box(
+                Modifier
+                    .padding(horizontal = 4.dp)
+                    .graphicsLayer {
+                        val progressOffset = dampedDragAnimation.value * tabWidthPx
+                        translationX = if (isLtr) progressOffset + panelOffset else -progressOffset + panelOffset
+                    }
+                    .drawBackdrop(
+                        backdrop = combinedBackdrop,
+                        shape = { pillShape },
+                        effects = {
+                            // 按压进度驱动透镜强度：按下时放大折射并带色散
+                            val progress = dampedDragAnimation.pressProgress
+                            lens(
+                                refractionHeight = 10.dp.toPx() * progress,
+                                refractionAmount = 14.dp.toPx() * progress,
+                                depthEffect = true,
+                                chromaticAberration = 0.5f
+                            )
+                        },
+                        highlight = { pillHighlight.value.copy(alpha = dampedDragAnimation.pressProgress) },
+                        layerBlock = {
+                            scaleX = dampedDragAnimation.scaleX
+                            scaleY = dampedDragAnimation.scaleY
+                            val velocity = dampedDragAnimation.velocity / 10f
+                            scaleX /= 1f - (velocity * 0.75f).fastCoerceIn(-0.2f, 0.2f)
+                            scaleY *= 1f - (velocity * 0.25f).fastCoerceIn(-0.2f, 0.2f)
+                        },
+                        onDrawSurface = {
+                            val progress = dampedDragAnimation.pressProgress
+                            drawRect(
+                                color = if (darkTheme) Color.White.copy(alpha = 0.1f)
+                                else Color.Black.copy(alpha = 0.1f),
+                                alpha = 1f - progress
+                            )
+                            drawRect(Color.Black.copy(alpha = 0.03f * progress))
+                        }
+                    )
+                    .innerShadow(shape = pillShape) {
+                        InnerShadow(
+                            radius = 8.dp * dampedDragAnimation.pressProgress,
+                            color = Color.Black.copy(alpha = 0.15f),
+                            alpha = dampedDragAnimation.pressProgress
+                        )
+                    }
+                    .height(56.dp)
+                    .width(tabWidthDp)
+            )
         }
     }
 }
 
 @Composable
-private fun GlassBarTab(
+private fun GlassBarTabItem(
     modifier: Modifier,
     item: GlassBarItem,
     selected: Boolean,
     onClick: () -> Unit
 ) {
-    val scheme = MaterialTheme.colorScheme
-    val interaction = remember { MutableInteractionSource() }
-    val pressed by interaction.collectIsPressedAsState()
-    // 按压回弹：按下收缩、松开弹回，模拟玻璃被按压的液体反馈
-    val scale by animateFloatAsState(
-        targetValue = if (pressed) 0.86f else 1f,
-        animationSpec = spring(dampingRatio = 0.42f, stiffness = Spring.StiffnessMedium),
-        label = "glassPressScale"
-    )
+    val scale = LocalGlassBarTabScale.current
     Column(
         modifier = modifier
             .fillMaxHeight()
             .graphicsLayer {
-                scaleX = scale
-                scaleY = scale
+                val s = scale()
+                scaleX = s
+                scaleY = s
             }
             .selectable(
                 selected = selected,
-                interactionSource = interaction,
+                interactionSource = null,
                 indication = null,
                 role = Role.Tab,
                 onClick = onClick
             ),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
+        verticalArrangement = Arrangement.spacedBy(2.dp, Alignment.CenterVertically)
     ) {
+        // 取 LocalContentColor：主行按选中态着色，图标层副本统一为主色（供胶囊透镜采样）
         Icon(
             item.icon,
             contentDescription = null,
             modifier = Modifier.size(24.dp),
-            tint = if (selected) scheme.primary else scheme.onSurfaceVariant
+            tint = LocalContentColor.current
         )
         Text(
             item.label,
             style = MaterialTheme.typography.labelSmall,
-            color = if (selected) scheme.primary else scheme.onSurfaceVariant
+            color = LocalContentColor.current
         )
+    }
+}
+
+// ==================== 组合 backdrop / 重力高光 ====================
+
+/** 把两个 backdrop 顺序绘制为一个：用于让胶囊同时折射应用内容与图标层。 */
+private class CombinedBackdrop(
+    val first: Backdrop,
+    val second: Backdrop
+) : Backdrop {
+
+    override val isCoordinatesDependent: Boolean =
+        first.isCoordinatesDependent || second.isCoordinatesDependent
+
+    override val offsetResidualX: Float get() = first.offsetResidualX
+    override val offsetResidualY: Float get() = first.offsetResidualY
+
+    override fun DrawScope.drawBackdrop(
+        density: Density,
+        coordinates: LayoutCoordinates?,
+        layerBlock: (GraphicsLayerScope.() -> Unit)?,
+        downscaleFactor: Int
+    ) {
+        with(first) { drawBackdrop(density, coordinates, layerBlock, downscaleFactor) }
+        with(second) { drawBackdrop(density, coordinates, layerBlock, downscaleFactor) }
+    }
+}
+
+@Composable
+private fun rememberCombinedBackdrop(first: Backdrop, second: Backdrop): Backdrop =
+    remember(first, second) { CombinedBackdrop(first, second) }
+
+/** 量化后的重力方向角：静止（|g_xy| 很小）时固定在屏幕上方。 */
+@Composable
+private fun rememberQuantizedGravityAngle(): State<Float> {
+    val tiltState = rememberDeviceTilt()
+    return remember(tiltState) {
+        derivedStateOf {
+            val tilt = tiltState.value
+            val magnitudeSquared = tilt.gravityX * tilt.gravityX + tilt.gravityY * tilt.gravityY
+            if (magnitudeSquared > GRAVITY_DIR_THRESHOLD_SQ) {
+                (atan2(tilt.gravityY, tilt.gravityX) / GRAVITY_ANGLE_STEP_RAD).roundToInt() * GRAVITY_ANGLE_STEP_RAD
+            } else {
+                (-PI / 2).toFloat()
+            }
+        }
+    }
+}
+
+/** 按重力方向旋转主光源，再附加一个固定偏移，得到随姿态变化的镜面高光。 */
+@Composable
+private fun rememberGravityRotatedHighlight(
+    base: Highlight,
+    extraDegrees: Float = 0f
+): State<Highlight> {
+    val baseStyle = base.style as BloomStroke
+    val angle = rememberQuantizedGravityAngle()
+    return remember(angle, base, extraDegrees) {
+        derivedStateOf {
+            val basePrimary = baseStyle.primaryLight
+            val rad = angle.value + (extraDegrees * PI / 180.0).toFloat()
+            base.copy(
+                style = baseStyle.copy(
+                    primaryLight = basePrimary.copy(
+                        position = LightPosition(
+                            x = LIGHT_REF_X + cos(rad),
+                            y = LIGHT_REF_Y + sin(rad),
+                            z = basePrimary.position.z
+                        )
+                    )
+                )
+            )
+        }
     }
 }
 
@@ -315,7 +653,7 @@ private fun BackdropEffectScope.lens(
 }
 
 private fun BackdropEffectScope.roundedRectCornerRadii(): FloatArray? {
-    val cornerShape = shape as? androidx.compose.foundation.shape.CornerBasedShape ?: return null
+    val cornerShape = shape as? CornerBasedShape ?: return null
     val sizePx = size
     val maxRadius = sizePx.minDimension / 2f
     val isLtr = layoutDirection == LayoutDirection.Ltr
