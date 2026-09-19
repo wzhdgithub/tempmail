@@ -124,17 +124,27 @@ private val GlassBarShape = RoundedCornerShape(28.dp)
 private const val INERTIA_PREDICT_SECONDS = 0.22f
 
 /** 按压力度带来的玻璃厚度增益（模糊/折射强度 = 1 + 增益×进度）。 */
-private const val THICKNESS_GAIN_PRESS = 0.6f
+private const val THICKNESS_GAIN_PRESS = 0.25f
 
-/** 拖动幅度（处于两 Tab 之间）带来的额外厚度增益（刻意压低：拖动时底栏本体只微动）。 */
-private const val THICKNESS_GAIN_FLOW = 0.35f
+/**
+ * 拖动幅度（处于两 Tab 之间）带来的额外厚度增益。
+ * 刻意压到很小：厚度会改变底栏自身边缘的折射带宽度，肉眼上就像"底栏背景跟着手指动"，
+ * 因此拖动时底栏本体的玻璃只允许极轻微的呼吸，视觉焦点留在胶囊放大镜上。
+ */
+private const val THICKNESS_GAIN_FLOW = 0.08f
 
 /** 未按下时，拖动幅度仍按该基准参与厚度计算（数值越小底栏本体越稳定）。 */
 private const val FLOW_BASELINE = 0.15f
 
-/** 速度 → 沿运动方向拉伸的系数与上限（拖动时底栏只做很轻的形变）。 */
-private const val STRETCH_GAIN = 0.02f
-private const val STRETCH_LIMIT = 0.035f
+/** 速度 → 沿运动方向拉伸的系数与上限（同样压到很小，避免底栏随拖动被"拉走"）。 */
+private const val STRETCH_GAIN = 0.008f
+private const val STRETCH_LIMIT = 0.010f
+
+/** 按住时底栏本体向外鼓起的高度（dp）：只做微动。 */
+private const val BAR_BULGE_DP = 6f
+
+/** 拖动幅度叠加到底栏宽度上的比例（0.004 ≈ 0.4%，几乎察觉不到）。 */
+private const val BAR_FLOW_SCALE = 0.004f
 
 /** 玻璃模糊半径（常量）：拖动过程中不改变，避免反复重建 RenderEffect 链。 */
 private const val BLUR_RADIUS_DP = 4f
@@ -337,12 +347,15 @@ private fun GlassBar(
             },
             onDrag = { _, dragAmount ->
                 if (tabWidthPx > 0f && dragAmount.x != 0f) {
-                    updateValue(
-                        (targetValue + dragAmount.x / tabWidthPx * if (isLtr) 1f else -1f)
-                            .coerceIn(0f, (tabsCount - 1).toFloat())
-                    )
+                    val sign = if (isLtr) 1f else -1f
+                    val requested = targetValue + dragAmount.x / tabWidthPx * sign
+                    val clamped = requested.coerceIn(0f, (tabsCount - 1).toFloat())
+                    updateValue(clamped)
+                    // 橡皮筋位移只取「拖到两端之外」的越界量：Tab 区间内拖动时底栏本体不跟着位移，
+                    // 否则整条底栏会随手指横移（观感上就是"底栏背景跟着放大镜一起动"）
+                    val overshootPx = (requested - clamped) * tabWidthPx * sign
                     animationScope.launch {
-                        offsetAnimation.snapTo(offsetAnimation.value + dragAmount.x)
+                        offsetAnimation.snapTo(overshootPx)
                     }
                 }
             }
@@ -431,12 +444,12 @@ private fun GlassBar(
                     layerBlock = {
                         val press = dampedDragAnimation.pressProgress
                         val width = size.width.coerceAtLeast(1f)
-                        val bulge = lerp(1f, 1f + 10.dp.toPx() / width, press)
-                        // 速度方向拉伸 + 拖动幅度延展：玻璃随运动方向轻微流动
+                        val bulge = lerp(1f, 1f + BAR_BULGE_DP.dp.toPx() / width, press)
+                        // 速度方向拉伸 + 拖动幅度延展：只保留极小幅度，底栏本体几乎不动
                         val flow = dampedDragAnimation.dragFlow
                         val stretch = (dampedDragAnimation.velocity * STRETCH_GAIN)
                             .fastCoerceIn(-STRETCH_LIMIT, STRETCH_LIMIT) * press
-                        scaleX = bulge * (1f + stretch + 0.02f * flow * press)
+                        scaleX = bulge * (1f + stretch + BAR_FLOW_SCALE * flow * press)
                         scaleY = bulge
                     },
                     onDrawSurface = { drawRect(containerColor) }
