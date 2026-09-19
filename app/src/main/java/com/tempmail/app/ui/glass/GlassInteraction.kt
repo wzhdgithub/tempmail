@@ -1,7 +1,10 @@
 package com.tempmail.app.ui.glass
 
-// 移植自 tiann/KernelSU（manager/app/.../component/miuix/animation，Apache-2.0），
-// 其本身改编自 compose-miuix-ui 官方示例 IosLiquidGlassNavigationBar。
+// 本文件移植自 tiann/KernelSU 的 manager 端（component/miuix/animation 与
+// modifier/DragGestureInspector），KernelSU 以 GPL-3.0-or-later 分发；
+// 其交互设计源自 compose-miuix-ui（Miuix）官方示例 LiquidGlassNavigationBar
+// 与 Kyant0/AndroidLiquidGlass（二者均为 Apache-2.0）。
+// 因此本文件随本项目一并按 GPL-3.0-or-later 分发，详见根目录 LICENSE 与 NOTICE.md。
 // 仅供 API 33+ 的液态玻璃底栏使用（RuntimeShader 依赖）。
 
 import android.annotation.SuppressLint

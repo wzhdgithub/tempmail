@@ -1989,18 +1989,6 @@ private fun SettingsTab(
                                     ctx.startActivity(Intent(Intent.ACTION_VIEW,
                                         Uri.parse("https://wzhblog6.pwapi.cn/")))
                                 })
-                            Spacer(Modifier.height(12.dp))
-                            ThemedDivider()
-                            Spacer(Modifier.height(12.dp))
-                            Text("Email", style = MaterialTheme.typography.labelLarge)
-                            Spacer(Modifier.height(4.dp))
-                            Text("(yjhsbwssg@163.com)", style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            Spacer(Modifier.height(12.dp))
-                            Text("微信", style = MaterialTheme.typography.labelLarge)
-                            Spacer(Modifier.height(4.dp))
-                            Text("(yjhsbwssg)", style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
                 }

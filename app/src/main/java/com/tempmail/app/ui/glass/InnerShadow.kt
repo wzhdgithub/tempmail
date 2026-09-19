@@ -1,7 +1,9 @@
 package com.tempmail.app.ui.glass
 
-// 移植自 tiann/KernelSU（manager/app/.../component/liquid/InnerShadow.kt，Apache-2.0），
-// 其本身改编自 Kyant0/AndroidLiquidGlass。仅供 API 33+ 的液态玻璃底栏使用。
+// 移植自 tiann/KernelSU（manager/app/.../component/liquid/InnerShadow.kt，GPL-3.0-or-later），
+// 该文件头注明其改编自 Kyant0/AndroidLiquidGlass（Apache-2.0，Copyright 2025 Kyant）。
+// 本文件随本项目按 GPL-3.0-or-later 分发，详见根目录 LICENSE 与 NOTICE.md。
+// 仅供 API 33+ 的液态玻璃底栏使用。
 
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.Stable

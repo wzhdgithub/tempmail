@@ -1,16 +1,29 @@
+# ===== 构建产物 / Gradle =====
 *.iml
-.gradle
-/local.properties
-/.idea
-.DS_Store
-/build
+.gradle/
+.kotlin/
+build/
+/app/build/
+/app/release/
 /captures
 .externalNativeBuild
 .cxx
+
+# ===== 本地配置（含机器路径，务必不要提交）=====
 local.properties
-/app/build
-/app/release
+/local.properties
+
+# ===== 签名与凭据（务必不要提交）=====
 *.jks
+*.keystore
 keystore.properties
+
+# ===== 打包产物 =====
+*.apk
+*.aab
+
+# ===== IDE / 系统 =====
+/.idea/
+/.fleet
 .vscode/
-.workbuddy/
+.DS_Store

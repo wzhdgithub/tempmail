@@ -731,8 +731,11 @@ private fun rememberGravityRotatedHighlight(
     }
 }
 
-// ==================== 玻璃效果（移植自 KernelSU / miuix 官方示例，Apache-2.0） ====================
-// Adapted from Kyant0/AndroidLiquidGlass — https://github.com/Kyant0/AndroidLiquidGlass (Apache 2.0)
+// ==================== 玻璃效果（着色器移植自 KernelSU，GPL-3.0-or-later） ====================
+// 折射/色散着色器来自 tiann/KernelSU 的 liquid/Lens.kt，其文件头注明：
+// Adapted from Kyant0/AndroidLiquidGlass — https://github.com/Kyant0/AndroidLiquidGlass (Apache 2.0)，
+// 以及 Mirrored from compose-miuix-ui example。
+// 本文件随本项目按 GPL-3.0-or-later 分发，详见根目录 LICENSE 与 NOTICE.md。
 
 /** 饱和度增强：让透过玻璃的内容更「通透」，接近 iOS 液态玻璃观感。 */
 private fun BackdropEffectScope.vibrancy() {
