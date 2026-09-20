@@ -29,6 +29,15 @@
 > 截图时页面背景为纯色，因此"模糊"不明显（模糊/色散在有文字或图片滚过底栏时最直观）；
 > 下图裁剪自同一组截图，用于看清"按下 = 放大镜"的形态差异：
 
+### 莫奈取色 · 主题设置（v2.1.0）
+
+| 浅色 + Monet（种子 = 默认主色蓝） | 深色 + Monet（种子 = 预设橙） |
+|---|---|
+| ![theme light](docs/images/theme-settings-light.png) | ![theme dark](docs/images/theme-settings-dark.png) |
+
+> Miuix 主题下的「主题设置」页：预览示意图 / 明暗三选一 / 启用 Monet 颜色 + 强调色 / 底栏选项。
+> 完整实现说明见 [docs/monet-theme.md](docs/monet-theme.md)。
+
 ---
 
 ## Features
@@ -50,7 +59,10 @@
 
 - 临时邮箱：一键生成邮箱、刷新收件、复制地址、历史邮箱复用
 - 邮件详情用 WebView 渲染 HTML，链接/按钮/验证码快捷复制
-- 15 种语言、深色模式、主题风格（Material3 / Miuix）与底栏风格切换
+- 15 种语言、明暗三态（跟随系统 / 浅色 / 深色）、主题风格（Material3 / Miuix）与底栏风格切换
+- **莫奈取色（Monet 动态配色）**：从图片或预设色取出一个种子色，推导出整套配色——
+  Material3 走 MCU 生成完整 ColorScheme，Miuix 复用同一份 scheme 映射到 Miuix 色板；
+  详细说明见 [docs/monet-theme.md](docs/monet-theme.md)
 - 启动时检查 GitHub Release 更新，下载 APK 并做 SHA-256 校验后安装
 
 ---
@@ -109,8 +121,12 @@ isGlassBlurSupported() = SDK_INT >= 33 && isRuntimeShaderSupported() && AGSL 探
 | `ui/glass/GlassBottomBar.kt` | 869 | `GlassShell` / `GlassBar` / `GlassBarTabItem`、手感常量、能力判定与降级、`CombinedBackdrop`、重力高光、`vibrancy()` / `lens()` / 两套 AGSL 着色器、`GlassBarSpace` |
 | `ui/glass/GlassInteraction.kt` | 318 | `DampedDragAnimation`（value / velocity / pressProgress / dragFlow、press / release / updateValue）、`InteractiveHighlight`（按压光斑）、手势工具 |
 | `ui/glass/InnerShadow.kt` | 140 | `InnerShadow` + `Modifier.innerShadow`（胶囊内阴影） |
-| `ui/theme/MiuixComponents.kt` | 267 | Miuix 主题桥接：`MiuixThemeIfNeeded` + `ThemedCard/Switch/Button/TextButton/IconButton/Divider/LinearProgress` |
-| `MainActivity.kt` | 2342 | 应用全部逻辑（单文件架构）+ 底栏装配点：`glassActive` 判定、`GlassShell` 调用、设置项、三个 Tab 的 `bottomOverlap` |
+| `ui/theme/MiuixComponents.kt` | 523 | Miuix 主题桥接：`MiuixThemeIfNeeded`、`hyperMiuixColors` / `dynamicMiuixColors`、`ThemedCard/Switch/Button/TextButton/IconButton/Divider/LinearProgress/SegmentedTabs/ListRow/DropdownValue` |
+| `ui/theme/Theme.kt` | 174 | 主题装配：seed → ColorScheme → `MaterialTheme` + `MiuixTheme`；`ThemeStyle` / `ThemeMode` 分支 |
+| `ui/theme/dynamic/DynamicColorSchemes.kt` | 134 | seed → 完整 Material 3 双套配色（MCU，纯函数）、`DynamicStyle`、`NoDynamicSeed` |
+| `ui/theme/dynamic/SeedExtractor.kt` | 46 | 图片 → 种子色（降采样 + androidx.palette） |
+| `ui/theme/dynamic/MonetPresets.kt` | 20 | 内置预设色 + `DefaultMonetSeed` |
+| `MainActivity.kt` | 3104 | 应用全部逻辑（单文件架构）+ 底栏装配点（`glassActive` 判定、`GlassShell` 调用）、设置页与莫奈取色 / 主题设置两个子页 |
 
 ---
 
@@ -358,6 +374,8 @@ ui/glass/InnerShadow.kt       // InnerShadow 参数类 + Modifier.innerShadow（
 | [Jetpack Compose](https://developer.android.com/jetpack/compose)（androidx.compose.*） | Apache-2.0 | 声明式 UI |
 | [Material 3](https://m3.material.io/) | Apache-2.0 | 设计系统与原有底栏 |
 | [AndroidX Core / Lifecycle / Activity Compose](https://developer.android.com/jetpack/androidx) | Apache-2.0 | 基础库 |
+| [androidx.palette](https://developer.android.com/jetpack/androidx/releases/palette) | Apache-2.0 | 从图片提取代表色（莫奈取色的种子色） |
+| [material-color-utilities](https://github.com/material-foundation/material-color-utilities)（KMP 移植：com.materialkolor） | Apache-2.0 | 由种子色生成完整 Material 3 配色 |
 | [OkHttp](https://square.github.io/okhttp/) | Apache-2.0 | HTTP 客户端 |
 | [PearAPI](https://api.pearapi.ai) | 服务 | 临时邮箱接口（非代码依赖） |
 
@@ -404,6 +422,7 @@ $env:JAVA_HOME = "C:\Program Files\Java\jdk-24"   # 必须 JDK 24（JDK 25 会�
 |---|---|
 | v1.0 ~ v1.9 | 临时邮箱主体功能演进：收件/历史/多语言/WebView 正文/验证码复制/自动更新与 SHA-256 校验/WebView 泄漏修复/自适应图标 等 |
 | **v2.0** | 工具链升级（Kotlin 2.4.20 / Compose 1.11.2 / material3 1.4.0 / compileSdk 37）；**底栏升级为 miuix-blur 真·液态玻璃**（模糊 + 边缘折射 + 色散 + 按压放大镜 + 拖动切换 + 惯性吸附）；新增 Miuix 主题（真正的 Miuix 组件，Material3 主题保持原样）；15 语言文案同步 |
+| **v2.1** | **莫奈取色（Monet 动态配色）**：从图片 / 预设色取种子色，Material3 走 MCU 生成完整 ColorScheme，Miuix 复用同一份 scheme 映射到 Miuix 色板；新增 Miuix 主题下的「主题设置」页（预览示意图 / 明暗三选一 / 启用 Monet 颜色 + 强调色 / 底栏选项）；明暗模式升级为三态（跟随系统 / 浅色 / 深色）；新增"模糊"总开关（关闭后液态玻璃退化为非模糊底栏）；实现文档见 [docs/monet-theme.md](docs/monet-theme.md) |
 
 ## 相关链接
 

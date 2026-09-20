@@ -25,3 +25,22 @@ enum class ThemeStyle(val key: String) {
         fun fromKey(key: String?): ThemeStyle = entries.find { it.key == key } ?: Material3
     }
 }
+
+// 明暗三态。持久化同样使用稳定字符串 key；
+// fromKey 对未知值回退 Light —— 旧版本只有布尔 isDarkMode 且默认 false（= 浅色），迁移后行为一致
+enum class ThemeMode(val key: String) {
+    System("system"),
+    Light("light"),
+    Dark("dark");
+
+    /** 是否使用深色配色：System 交给系统夜间模式决定，其余两态为显式覆盖。 */
+    fun isDark(systemDark: Boolean): Boolean = when (this) {
+        System -> systemDark
+        Light -> false
+        Dark -> true
+    }
+
+    companion object {
+        fun fromKey(key: String?): ThemeMode = entries.find { it.key == key } ?: Light
+    }
+}

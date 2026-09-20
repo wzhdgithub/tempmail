@@ -2,9 +2,16 @@ package com.tempmail.app.ui.glass
 
 import android.annotation.SuppressLint
 import android.os.Build
+import android.os.SystemClock
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.EaseOut
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
@@ -41,11 +48,13 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -59,6 +68,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.changedToUpIgnoreConsumed
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChangeIgnoreConsumed
+import androidx.compose.ui.input.pointer.util.VelocityTracker
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
@@ -74,6 +84,7 @@ import androidx.compose.ui.util.fastCoerceAtMost
 import androidx.compose.ui.util.fastCoerceIn
 import androidx.compose.ui.util.fastFirstOrNull
 import androidx.compose.ui.util.lerp
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import top.yukonga.miuix.kmp.blur.Backdrop
 import top.yukonga.miuix.kmp.blur.BackdropEffectScope
@@ -213,6 +224,13 @@ private const val GRAVITY_ANGLE_STEP_RAD = (3.0 * PI / 180.0).toFloat()
 /**
  * 液态玻璃外壳：玻璃模式下内容铺满整屏并挂载 backdrop 图层，底栏浮于其上；
  * 非玻璃模式退化为普通 Scaffold（不触碰任何 miuix-blur API，行为与迁移前一致）。
+ *
+ * 玻璃底栏的进出是**交叉过渡**，不是瞬切：
+ *   - 开启时：先以"普通底栏可见、玻璃底栏不可见"挂载，下一帧翻转，
+ *     玻璃底栏淡入上移、普通底栏淡出，两者在同一位置交接；
+ *   - 关闭时：先播放反向交叉过渡，动画结束后才把外壳切回普通布局
+ *     （否则 GlassBar 会随分支一起被瞬间移除，表现为生硬消失）。
+ * 只有 HyperOS + 液态玻璃形态会走到这里，Material3 底栏完全不受影响。
  */
 @Composable
 fun GlassShell(
@@ -225,7 +243,25 @@ fun GlassShell(
     fallbackBar: @Composable () -> Unit,
     content: @Composable (PaddingValues) -> Unit
 ) {
-    if (!glass) {
+    // mounted：外壳是否走玻璃布局；barVisible：玻璃底栏是否可见（两者错开一帧实现交叉过渡）
+    var mounted by remember { mutableStateOf(glass) }
+    var barVisible by remember { mutableStateOf(false) }
+    LaunchedEffect(glass) {
+        if (glass) {
+            if (!mounted) {
+                mounted = true
+                barVisible = false
+                // 等一帧让"不可见"先落地，AnimatedVisibility 才会播放进入动画
+                withFrameNanos { }
+            }
+            barVisible = true
+        } else {
+            barVisible = false
+            delay(BAR_TRANSITION_MS.toLong())
+            mounted = false
+        }
+    }
+    if (!mounted) {
         Scaffold(snackbarHost = snackbarHost, bottomBar = fallbackBar) { content(it) }
         return
     }
@@ -248,14 +284,40 @@ fun GlassShell(
         ) { p ->
             content(p)
         }
-        GlassBar(
-            modifier = Modifier.align(Alignment.BottomCenter),
-            backdrop = backdrop,
-            darkTheme = darkTheme,
-            items = items,
-            selectedIndex = selectedIndex,
-            onSelect = onSelect
-        )
+        // 玻璃底栏：进出走淡入淡出 + 轻微纵向位移；隐藏后从组合中移除（不会拦截点击）
+        Box(Modifier.align(Alignment.BottomCenter)) {
+            BottomBarTransition(visible = barVisible) {
+                GlassBar(
+                    modifier = Modifier,
+                    backdrop = backdrop,
+                    darkTheme = darkTheme,
+                    items = items,
+                    selectedIndex = selectedIndex,
+                    onSelect = onSelect
+                )
+            }
+        }
+        // 退出过程中让普通底栏在同一位置淡入，与玻璃底栏形成交叉过渡
+        Box(Modifier.align(Alignment.BottomCenter)) {
+            BottomBarTransition(visible = !barVisible) { fallbackBar() }
+        }
+    }
+}
+
+/** 底栏进出过渡时长（ms）：淡入淡出 + 轻微纵向位移，与主题切换节奏保持一致。 */
+private const val BAR_TRANSITION_MS = 240
+
+/** 底栏的进入/退出动画：淡入 + 轻微上移；退出为淡出 + 轻微下移。 */
+@Composable
+private fun BottomBarTransition(visible: Boolean, content: @Composable () -> Unit) {
+    AnimatedVisibility(
+        visible = visible,
+        enter = fadeIn(tween(BAR_TRANSITION_MS)) +
+            slideInVertically(tween(BAR_TRANSITION_MS)) { height -> height / 4 },
+        exit = fadeOut(tween(BAR_TRANSITION_MS)) +
+            slideOutVertically(tween(BAR_TRANSITION_MS)) { height -> height / 4 }
+    ) {
+        content()
     }
 }
 
@@ -304,6 +366,10 @@ private fun GlassBar(
 
     var currentIndex by remember { mutableIntStateOf(selectedIndex) }
     val onSelectedUpdated by rememberUpdatedState(onSelect)
+    // 松手瞬间的"手指速度"（单位 = Tab/秒）：惯性吸附只认手指速度。
+    // 不能复用 DampedDragAnimation.velocity —— 它是动画值自身的速度，会被按下预览
+    // （onDragStarted 里把胶囊直接移到按下位置）和吸附动画污染，导致预测到相邻 Tab。
+    val fingerVelocityTabs = remember { mutableFloatStateOf(0f) }
 
     fun indexAt(positionX: Float): Int {
         if (tabWidthPx == 0f) return currentIndex
@@ -325,10 +391,9 @@ private fun GlassBar(
             canDrag = { offset -> offset.x in 0f..totalWidthPx },
             onDragStarted = { position -> updateValue(indexAt(position.x).toFloat()) },
             onDragStopped = {
-                // 惯性吸附：位置 + 速度预测（INERTIA_PREDICT_SECONDS 的甩动行程），
+                // 惯性吸附：位置 + 手指速度预测（INERTIA_PREDICT_SECONDS 的甩动行程），
                 // 快速甩动即使未越过中点也能吸附到相邻 Tab，慢速拖动则按位置就近吸附
-                val span = (tabsCount - 1).toFloat().coerceAtLeast(1e-6f)
-                val predicted = targetValue + velocity * span * INERTIA_PREDICT_SECONDS
+                val predicted = targetValue + fingerVelocityTabs.value * INERTIA_PREDICT_SECONDS
                 val targetIndex = predicted.roundToInt().coerceIn(0, tabsCount - 1)
                 if (currentIndex != targetIndex) {
                     currentIndex = targetIndex
@@ -588,29 +653,58 @@ private fun GlassBar(
                         val down = awaitFirstDown(requireUnconsumed = false)
                         val startPos = down.position
                         var travelled = 0f
+                        // 手指速度采样：只用真实指针事件，与胶囊动画无关
+                        val fingerTracker = VelocityTracker()
+                        fingerTracker.addPosition(SystemClock.uptimeMillis(), Offset(startPos.x, 0f))
                         with(dampedDragAnimation) { onDragStarted(startPos) }
                         dampedDragAnimation.press()
                         var lifted = false
-                        while (true) {
-                            val event = awaitPointerEvent()
-                            val change = event.changes.fastFirstOrNull { it.id == down.id } ?: break
-                            if (change.changedToUpIgnoreConsumed()) {
-                                lifted = true
-                                break
+                        var committed = false
+                        try {
+                            while (true) {
+                                val event = awaitPointerEvent()
+                                val change = event.changes.fastFirstOrNull { it.id == down.id } ?: break
+                                if (change.changedToUpIgnoreConsumed()) {
+                                    lifted = true
+                                    break
+                                }
+                                val delta = change.positionChangeIgnoreConsumed()
+                                if (delta != Offset.Zero) {
+                                    travelled += delta.getDistance()
+                                    fingerTracker.addPosition(
+                                        SystemClock.uptimeMillis(),
+                                        Offset(change.position.x, 0f)
+                                    )
+                                    with(dampedDragAnimation) { onDrag(IntSize.Zero, delta) }
+                                    change.consume()
+                                }
                             }
-                            val delta = change.positionChangeIgnoreConsumed()
-                            if (delta != Offset.Zero) {
-                                travelled += delta.getDistance()
-                                with(dampedDragAnimation) { onDrag(IntSize.Zero, delta) }
-                                change.consume()
+                            if (lifted && travelled < touchSlop) {
+                                // 位移极小 → 视为点击：按下的那个 Tab 就是结果，
+                                // 不做惯性预测（预测只对真正的甩动有意义，用在这里会把选中态
+                                // 带到相邻 Tab，表现为"点历史却跳到设置"）
+                                activateTab(indexAt(startPos.x))
+                                committed = true
+                            } else if (lifted) {
+                                // 拖动结束：惯性吸附，速度取手指速度
+                                val velocityPxPerSecond = fingerTracker.calculateVelocity().x
+                                fingerVelocityTabs.value = if (tabWidthPx > 0f) {
+                                    velocityPxPerSecond / tabWidthPx
+                                } else {
+                                    0f
+                                }
+                                with(dampedDragAnimation) { onDragStopped() }
+                                committed = true
                             }
+                        } finally {
+                            // 手势被打断（指针丢失 / 协程取消）时必须回滚：
+                            // 否则按下预览移动过的胶囊会停在那个 Tab 上，而真正选中的还是原 Tab，
+                            // 底栏高亮与页面内容从此不一致
+                            if (!committed) {
+                                with(dampedDragAnimation) { onDragCancelled() }
+                            }
+                            dampedDragAnimation.release()
                         }
-                        if (lifted && travelled < touchSlop) {
-                            // 位移极小 → 视为点击
-                            activateTab(indexAt(startPos.x))
-                        }
-                        with(dampedDragAnimation) { onDragStopped() }
-                        dampedDragAnimation.release()
                     }
                 }
         )

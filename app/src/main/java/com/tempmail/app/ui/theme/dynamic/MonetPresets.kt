@@ -5,6 +5,13 @@ package com.tempmail.app.ui.theme.dynamic
 // 刻意不打包任何画作图片：莫奈原作虽已进入公有领域，但现代扫描 / 数字修复版在部分司法辖区
 // 可能另有权利，且打包图片会明显增大 APK。这里只保留"能生成整套主题的那一个颜色"，
 // 用户也可以改用「选择图片」从自己的图片里取色。
+/**
+ * 「强调色 → 默认」对应的种子色：应用主色蓝（与 HyperBlueLight 同值）。
+ * 选它时仍然走完整的取色流程，只是种子换成应用自己的主色，
+ * 于是"默认"= 由主色蓝推导出的整套配色，而不是退回硬编码配色。
+ */
+val DefaultMonetSeed: Int = 0xFF0072E3.toInt()
+
 val MonetPresets: List<Int> = listOf(
     0xFF3F6E7A.toInt(), // 睡莲池 · 蓝绿
     0xFF2B3F73.toInt(), // 夜色 · 深蓝

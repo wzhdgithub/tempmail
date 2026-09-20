@@ -28,6 +28,9 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.SystemBarStyle
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
@@ -39,12 +42,15 @@ import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
@@ -55,7 +61,9 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Create
 import androidx.compose.material.icons.filled.DateRange
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Settings
@@ -67,9 +75,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.compositeOver
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
@@ -82,15 +96,22 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Popup
+import androidx.compose.ui.window.PopupProperties
 import androidx.core.view.WindowCompat
 import com.tempmail.app.ui.glass.GlassBarItem
 import com.tempmail.app.ui.glass.GlassBarSpace
 import com.tempmail.app.ui.glass.GlassShell
 import com.tempmail.app.ui.glass.isGlassBlurSupported
 import com.tempmail.app.ui.theme.TempMailTheme
+import com.tempmail.app.ui.theme.THEME_ANIM_MS
+import com.tempmail.app.ui.theme.ThemeMode
 import com.tempmail.app.ui.theme.ThemeStyle
+import com.tempmail.app.ui.theme.dynamic.DefaultMonetSeed
 import com.tempmail.app.ui.theme.dynamic.DynamicStyle
 import com.tempmail.app.ui.theme.dynamic.MonetPresets
 import com.tempmail.app.ui.theme.dynamic.NoDynamicSeed
@@ -98,11 +119,17 @@ import com.tempmail.app.ui.theme.dynamic.extractSeedFromUri
 import com.tempmail.app.ui.theme.ThemedButton
 import com.tempmail.app.ui.theme.ThemedCard
 import com.tempmail.app.ui.theme.ThemedDivider
+import com.tempmail.app.ui.theme.ThemedDropdownValue
 import com.tempmail.app.ui.theme.ThemedIconButton
 import com.tempmail.app.ui.theme.ThemedLinearProgress
+import com.tempmail.app.ui.theme.ThemedListRow
+import com.tempmail.app.ui.theme.ThemedSegmentedTabs
 import com.tempmail.app.ui.theme.ThemedSwitch
 import com.tempmail.app.ui.theme.ThemedTextButton
+import com.tempmail.app.ui.theme.cornerRadiusOf
+import com.tempmail.app.ui.theme.themedBarContainerColor
 import com.tempmail.app.ui.theme.themedCornerShape
+import com.tempmail.app.ui.theme.themedSurfaceColors
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -175,7 +202,20 @@ private data class Strings(
     val monetContrastHigh: String = "High",
     val monetClose: String = "Turn off",
     val monetExtracting: String = "Extracting color…",
-    val monetFailed: String = "Couldn't extract a color, try another image"
+    val monetFailed: String = "Couldn't extract a color, try another image",
+    // 主题设置页（Miuix 主题）。同样 15 种语言均已翻译，默认值作为未知语言的英文兜底。
+    val themeSettings: String = "Theme Settings",
+    val themeFollowSystem: String = "Follow system",
+    val themeLight: String = "Light",
+    val themeDark: String = "Dark",
+    val monetEnable: String = "Enable Monet colors",
+    val monetAccent: String = "Accent color",
+    val monetAccentDefault: String = "Default",
+    val monetAccentCustom: String = "Custom",
+    val barBlur: String = "Blur",
+    val barBlurDesc: String = "Blur the top and bottom bars",
+    val barFloatDesc: String = "Floating bottom bar in Apple style",
+    val barGlassDesc: String = "Liquid glass effect for the floating bar"
 )
 
 private fun strings(lang: String): Strings = when (lang) {
@@ -235,7 +275,12 @@ private fun strings(lang: String): Strings = when (lang) {
         monet = "モネの色抽出", monetDesc = "画像から1色を取り出し、Material 3 の配色一式を生成します",
         monetPickImage = "画像を選択", monetPresets = "プリセット", monetStyle = "配色スタイル", monetContrast = "コントラスト",
         monetContrastDefault = "標準", monetContrastHigh = "高", monetClose = "動的配色をオフ",
-        monetExtracting = "色を抽出中…", monetFailed = "色を抽出できませんでした。別の画像をお試しください"
+        monetExtracting = "色を抽出中…", monetFailed = "色を抽出できませんでした。別の画像をお試しください",
+        themeSettings = "テーマ設定", themeFollowSystem = "システムに従う", themeLight = "ライト", themeDark = "ダーク",
+        monetEnable = "Monet カラーを有効化", monetAccent = "アクセントカラー",
+        monetAccentDefault = "デフォルト", monetAccentCustom = "カスタム",
+        barBlur = "ぼかし", barBlurDesc = "上部バーと下部バーのぼかしを有効にします",
+        barFloatDesc = "Apple 風のフローティングバーを使用します", barGlassDesc = "フローティングバーにリキッドグラス効果を適用します"
     )
     "ko" -> Strings(
         title = "임시 메일",
@@ -266,7 +311,12 @@ private fun strings(lang: String): Strings = when (lang) {
         monet = "모네 색상 추출", monetDesc = "이미지에서 색 하나를 뽑아 Material 3 전체 배색을 생성합니다",
         monetPickImage = "이미지 선택", monetPresets = "프리셋", monetStyle = "배색 스타일", monetContrast = "대비",
         monetContrastDefault = "기본", monetContrastHigh = "높음", monetClose = "동적 색상 끄기",
-        monetExtracting = "색상 추출 중…", monetFailed = "색상을 추출하지 못했습니다. 다른 이미지를 사용해 보세요"
+        monetExtracting = "색상 추출 중…", monetFailed = "색상을 추출하지 못했습니다. 다른 이미지를 사용해 보세요",
+        themeSettings = "테마 설정", themeFollowSystem = "시스템 따르기", themeLight = "라이트", themeDark = "다크",
+        monetEnable = "Monet 색상 사용", monetAccent = "강조 색상",
+        monetAccentDefault = "기본", monetAccentCustom = "사용자 지정",
+        barBlur = "블러", barBlurDesc = "상단 및 하단 바에 블러 효과 사용",
+        barFloatDesc = "Apple 스타일의 플로팅 하단 바 사용", barGlassDesc = "플로팅 하단 바에 리퀴드 글래스 효과 사용"
     )
     "fr" -> Strings(
         title = "Temp Mail",
@@ -297,7 +347,12 @@ private fun strings(lang: String): Strings = when (lang) {
         monet = "Couleurs Monet", monetDesc = "Extrayez une couleur d'une image pour générer toute la palette Material 3",
         monetPickImage = "Choisir une image", monetPresets = "Préréglages", monetStyle = "Style de couleur", monetContrast = "Contraste",
         monetContrastDefault = "Par défaut", monetContrastHigh = "Élevé", monetClose = "Désactiver les couleurs dynamiques",
-        monetExtracting = "Extraction de la couleur…", monetFailed = "Impossible d'extraire une couleur, essayez une autre image"
+        monetExtracting = "Extraction de la couleur…", monetFailed = "Impossible d'extraire une couleur, essayez une autre image",
+        themeSettings = "Réglages du thème", themeFollowSystem = "Suivre le système", themeLight = "Clair", themeDark = "Sombre",
+        monetEnable = "Activer les couleurs Monet", monetAccent = "Couleur d'accent",
+        monetAccentDefault = "Par défaut", monetAccentCustom = "Personnalisée",
+        barBlur = "Flou", barBlurDesc = "Active le flou des barres supérieure et inférieure",
+        barFloatDesc = "Barre inférieure flottante de style Apple", barGlassDesc = "Effet verre liquide pour la barre flottante"
     )
     "de" -> Strings(
         title = "Temp Mail",
@@ -328,7 +383,12 @@ private fun strings(lang: String): Strings = when (lang) {
         monet = "Monet-Farben", monetDesc = "Eine Farbe aus einem Bild ziehen und daraus ein komplettes Material-3-Farbschema erzeugen",
         monetPickImage = "Bild auswählen", monetPresets = "Voreinstellungen", monetStyle = "Farbstil", monetContrast = "Kontrast",
         monetContrastDefault = "Standard", monetContrastHigh = "Hoch", monetClose = "Dynamische Farben ausschalten",
-        monetExtracting = "Farbe wird extrahiert…", monetFailed = "Farbe konnte nicht extrahiert werden, bitte anderes Bild wählen"
+        monetExtracting = "Farbe wird extrahiert…", monetFailed = "Farbe konnte nicht extrahiert werden, bitte anderes Bild wählen",
+        themeSettings = "Themeneinstellungen", themeFollowSystem = "System folgen", themeLight = "Hell", themeDark = "Dunkel",
+        monetEnable = "Monet-Farben aktivieren", monetAccent = "Akzentfarbe",
+        monetAccentDefault = "Standard", monetAccentCustom = "Benutzerdefiniert",
+        barBlur = "Weichzeichnen", barBlurDesc = "Obere und untere Leiste weichzeichnen",
+        barFloatDesc = "Schwebende Leiste im Apple-Stil", barGlassDesc = "Flüssigglas-Effekt für die schwebende Leiste"
     )
     "es" -> Strings(
         title = "Correo Temporal",
@@ -359,7 +419,12 @@ private fun strings(lang: String): Strings = when (lang) {
         monet = "Colores de Monet", monetDesc = "Extrae un color de una imagen y genera toda la paleta Material 3",
         monetPickImage = "Elegir imagen", monetPresets = "Ajustes preestablecidos", monetStyle = "Estilo de color", monetContrast = "Contraste",
         monetContrastDefault = "Predeterminado", monetContrastHigh = "Alto", monetClose = "Desactivar colores dinámicos",
-        monetExtracting = "Extrayendo el color…", monetFailed = "No se pudo extraer el color, prueba con otra imagen"
+        monetExtracting = "Extrayendo el color…", monetFailed = "No se pudo extraer el color, prueba con otra imagen",
+        themeSettings = "Ajustes de tema", themeFollowSystem = "Seguir el sistema", themeLight = "Claro", themeDark = "Oscuro",
+        monetEnable = "Activar colores Monet", monetAccent = "Color de acento",
+        monetAccentDefault = "Predeterminado", monetAccentCustom = "Personalizado",
+        barBlur = "Desenfoque", barBlurDesc = "Desenfoca las barras superior e inferior",
+        barFloatDesc = "Barra inferior flotante estilo Apple", barGlassDesc = "Efecto de cristal líquido en la barra flotante"
     )
     "pt" -> Strings(
         title = "Email Temporário",
@@ -390,7 +455,12 @@ private fun strings(lang: String): Strings = when (lang) {
         monet = "Cores de Monet", monetDesc = "Extraia uma cor de uma imagem e gere toda a paleta Material 3",
         monetPickImage = "Escolher imagem", monetPresets = "Predefinições", monetStyle = "Estilo de cor", monetContrast = "Contraste",
         monetContrastDefault = "Padrão", monetContrastHigh = "Alto", monetClose = "Desativar cores dinâmicas",
-        monetExtracting = "Extraindo a cor…", monetFailed = "Não foi possível extrair a cor, tente outra imagem"
+        monetExtracting = "Extraindo a cor…", monetFailed = "Não foi possível extrair a cor, tente outra imagem",
+        themeSettings = "Ajustes de tema", themeFollowSystem = "Seguir o sistema", themeLight = "Claro", themeDark = "Escuro",
+        monetEnable = "Ativar cores Monet", monetAccent = "Cor de destaque",
+        monetAccentDefault = "Padrão", monetAccentCustom = "Personalizada",
+        barBlur = "Desfoque", barBlurDesc = "Desfoca as barras superior e inferior",
+        barFloatDesc = "Barra inferior flutuante estilo Apple", barGlassDesc = "Efeito de vidro líquido na barra flutuante"
     )
     "ru" -> Strings(
         title = "Временная почта",
@@ -421,7 +491,12 @@ private fun strings(lang: String): Strings = when (lang) {
         monet = "Цвета Моне", monetDesc = "Извлеките цвет из изображения и получите полную палитру Material 3",
         monetPickImage = "Выбрать изображение", monetPresets = "Пресеты", monetStyle = "Стиль цвета", monetContrast = "Контраст",
         monetContrastDefault = "Обычный", monetContrastHigh = "Высокий", monetClose = "Отключить динамические цвета",
-        monetExtracting = "Извлечение цвета…", monetFailed = "Не удалось извлечь цвет, попробуйте другое изображение"
+        monetExtracting = "Извлечение цвета…", monetFailed = "Не удалось извлечь цвет, попробуйте другое изображение",
+        themeSettings = "Настройки темы", themeFollowSystem = "Как в системе", themeLight = "Светлая", themeDark = "Тёмная",
+        monetEnable = "Включить цвета Monet", monetAccent = "Акцентный цвет",
+        monetAccentDefault = "По умолчанию", monetAccentCustom = "Свой",
+        barBlur = "Размытие", barBlurDesc = "Размывать верхнюю и нижнюю панели",
+        barFloatDesc = "Плавающая панель в стиле Apple", barGlassDesc = "Эффект жидкого стекла для плавающей панели"
     )
     "it" -> Strings(
         title = "Email Temporanea",
@@ -452,7 +527,12 @@ private fun strings(lang: String): Strings = when (lang) {
         monet = "Colori di Monet", monetDesc = "Estrai un colore da un'immagine e genera l'intera palette Material 3",
         monetPickImage = "Scegli immagine", monetPresets = "Preset", monetStyle = "Stile colore", monetContrast = "Contrasto",
         monetContrastDefault = "Predefinito", monetContrastHigh = "Alto", monetClose = "Disattiva colori dinamici",
-        monetExtracting = "Estrazione del colore…", monetFailed = "Impossibile estrarre il colore, prova un'altra immagine"
+        monetExtracting = "Estrazione del colore…", monetFailed = "Impossibile estrarre il colore, prova un'altra immagine",
+        themeSettings = "Impostazioni tema", themeFollowSystem = "Segui il sistema", themeLight = "Chiaro", themeDark = "Scuro",
+        monetEnable = "Attiva colori Monet", monetAccent = "Colore d'accento",
+        monetAccentDefault = "Predefinito", monetAccentCustom = "Personalizzato",
+        barBlur = "Sfocatura", barBlurDesc = "Sfoca le barre superiore e inferiore",
+        barFloatDesc = "Barra inferiore fluttuante in stile Apple", barGlassDesc = "Effetto vetro liquido per la barra fluttuante"
     )
     "ar" -> Strings(
         title = "بريد مؤقت",
@@ -483,7 +563,12 @@ private fun strings(lang: String): Strings = when (lang) {
         monet = "ألوان مونيه", monetDesc = "استخرج لونًا من صورة وأنشئ لوحة Material 3 كاملة",
         monetPickImage = "اختيار صورة", monetPresets = "إعدادات جاهزة", monetStyle = "نمط الألوان", monetContrast = "التباين",
         monetContrastDefault = "افتراضي", monetContrastHigh = "عالٍ", monetClose = "إيقاف الألوان الديناميكية",
-        monetExtracting = "جارٍ استخراج اللون…", monetFailed = "تعذّر استخراج اللون، جرّب صورة أخرى"
+        monetExtracting = "جارٍ استخراج اللون…", monetFailed = "تعذّر استخراج اللون، جرّب صورة أخرى",
+        themeSettings = "إعدادات المظهر", themeFollowSystem = "حسب النظام", themeLight = "فاتح", themeDark = "داكن",
+        monetEnable = "تفعيل ألوان Monet", monetAccent = "لون التمييز",
+        monetAccentDefault = "افتراضي", monetAccentCustom = "مخصّص",
+        barBlur = "تمويه", barBlurDesc = "تفعيل تمويه الشريطين العلوي والسفلي",
+        barFloatDesc = "شريط سفلي عائم بأسلوب Apple", barGlassDesc = "تأثير الزجاج السائل للشريط العائم"
     )
     "hi" -> Strings(
         title = "अस्थायी मेल",
@@ -514,7 +599,12 @@ private fun strings(lang: String): Strings = when (lang) {
         monet = "मोने रंग", monetDesc = "किसी छवि से एक रंग निकालें और पूरी Material 3 रंग-योजना बनाएँ",
         monetPickImage = "छवि चुनें", monetPresets = "प्रीसेट", monetStyle = "रंग शैली", monetContrast = "कंट्रास्ट",
         monetContrastDefault = "डिफ़ॉल्ट", monetContrastHigh = "उच्च", monetClose = "डायनामिक रंग बंद करें",
-        monetExtracting = "रंग निकाला जा रहा है…", monetFailed = "रंग नहीं निकाला जा सका, कोई दूसरी छवि आज़माएँ"
+        monetExtracting = "रंग निकाला जा रहा है…", monetFailed = "रंग नहीं निकाला जा सका, कोई दूसरी छवि आज़माएँ",
+        themeSettings = "थीम सेटिंग", themeFollowSystem = "सिस्टम के अनुसार", themeLight = "हल्का", themeDark = "गहरा",
+        monetEnable = "Monet रंग चालू करें", monetAccent = "एक्सेंट रंग",
+        monetAccentDefault = "डिफ़ॉल्ट", monetAccentCustom = "कस्टम",
+        barBlur = "धुंधलापन", barBlurDesc = "ऊपरी और निचले बार को धुंधला करें",
+        barFloatDesc = "Apple शैली का फ़्लोटिंग बॉटम बार", barGlassDesc = "फ़्लोटिंग बार के लिए लिक्विड ग्लास प्रभाव"
     )
     "vi" -> Strings(
         title = "Mail Tạm Thời",
@@ -545,7 +635,12 @@ private fun strings(lang: String): Strings = when (lang) {
         monet = "Màu Monet", monetDesc = "Lấy một màu từ ảnh để tạo toàn bộ bảng màu Material 3",
         monetPickImage = "Chọn ảnh", monetPresets = "Cài sẵn", monetStyle = "Kiểu màu", monetContrast = "Độ tương phản",
         monetContrastDefault = "Mặc định", monetContrastHigh = "Cao", monetClose = "Tắt màu động",
-        monetExtracting = "Đang trích xuất màu…", monetFailed = "Không trích xuất được màu, hãy thử ảnh khác"
+        monetExtracting = "Đang trích xuất màu…", monetFailed = "Không trích xuất được màu, hãy thử ảnh khác",
+        themeSettings = "Cài đặt chủ đề", themeFollowSystem = "Theo hệ thống", themeLight = "Sáng", themeDark = "Tối",
+        monetEnable = "Bật màu Monet", monetAccent = "Màu nhấn",
+        monetAccentDefault = "Mặc định", monetAccentCustom = "Tùy chỉnh",
+        barBlur = "Làm mờ", barBlurDesc = "Làm mờ thanh trên và thanh dưới",
+        barFloatDesc = "Thanh dưới nổi kiểu Apple", barGlassDesc = "Hiệu ứng kính lỏng cho thanh nổi"
     )
     "th" -> Strings(
         title = "อีเมลชั่วคราว",
@@ -576,7 +671,12 @@ private fun strings(lang: String): Strings = when (lang) {
         monet = "สีแบบโมเนต์", monetDesc = "ดึงสีหนึ่งจากรูปภาพเพื่อสร้างชุดสี Material 3 ทั้งหมด",
         monetPickImage = "เลือกรูปภาพ", monetPresets = "ค่าที่ตั้งไว้", monetStyle = "สไตล์สี", monetContrast = "คอนทราสต์",
         monetContrastDefault = "ค่าเริ่มต้น", monetContrastHigh = "สูง", monetClose = "ปิดสีไดนามิก",
-        monetExtracting = "กำลังดึงสี…", monetFailed = "ดึงสีไม่สำเร็จ ลองใช้รูปอื่น"
+        monetExtracting = "กำลังดึงสี…", monetFailed = "ดึงสีไม่สำเร็จ ลองใช้รูปอื่น",
+        themeSettings = "ตั้งค่าธีม", themeFollowSystem = "ตามระบบ", themeLight = "สว่าง", themeDark = "มืด",
+        monetEnable = "เปิดใช้สี Monet", monetAccent = "สีเน้น",
+        monetAccentDefault = "ค่าเริ่มต้น", monetAccentCustom = "กำหนดเอง",
+        barBlur = "เบลอ", barBlurDesc = "เปิดเบลอแถบด้านบนและด้านล่าง",
+        barFloatDesc = "แถบล่างแบบลอยสไตล์ Apple", barGlassDesc = "เอฟเฟกต์กระจกเหลวสำหรับแถบลอย"
     )
     "id" -> Strings(
         title = "Email Sementara",
@@ -607,7 +707,12 @@ private fun strings(lang: String): Strings = when (lang) {
         monet = "Warna Monet", monetDesc = "Ambil satu warna dari gambar untuk membuat skema Material 3 lengkap",
         monetPickImage = "Pilih gambar", monetPresets = "Preset", monetStyle = "Gaya warna", monetContrast = "Kontras",
         monetContrastDefault = "Bawaan", monetContrastHigh = "Tinggi", monetClose = "Matikan warna dinamis",
-        monetExtracting = "Mengekstrak warna…", monetFailed = "Warna gagal diekstrak, coba gambar lain"
+        monetExtracting = "Mengekstrak warna…", monetFailed = "Warna gagal diekstrak, coba gambar lain",
+        themeSettings = "Pengaturan Tema", themeFollowSystem = "Ikuti sistem", themeLight = "Terang", themeDark = "Gelap",
+        monetEnable = "Aktifkan warna Monet", monetAccent = "Warna aksen",
+        monetAccentDefault = "Bawaan", monetAccentCustom = "Kustom",
+        barBlur = "Blur", barBlurDesc = "Blur bilah atas dan bilah bawah",
+        barFloatDesc = "Bilah bawah mengambang gaya Apple", barGlassDesc = "Efek kaca cair untuk bilah mengambang"
     )
     else -> Strings(
         title = "临时邮箱",
@@ -634,12 +739,24 @@ private fun strings(lang: String): Strings = when (lang) {
         cancel = "取消", rawData = "原始数据:",
         authorHomepage = "作者主页", projectRepo = "项目仓库",
         themeStyle = "主题风格", themeDefault = "Material3", themeHyperOS = "Miuix",
-        barStyle = "底栏风格", barStyleFloat = "悬浮", barStyleGlass = "Liquid Glass", glassHint = "长按底栏可左右拖动切换标签",
+        barStyle = "底栏风格", barStyleFloat = "悬浮底栏", barStyleGlass = "Liquid Glass", glassHint = "长按底栏可左右拖动切换标签",
         monet = "莫奈取色", monetDesc = "从图片里取一个颜色，生成整套 Material 3 配色",
         monetPickImage = "选择图片", monetPresets = "预设", monetStyle = "配色风格", monetContrast = "对比度",
         monetContrastDefault = "默认", monetContrastHigh = "高", monetClose = "关闭动态配色",
-        monetExtracting = "正在提取主色…", monetFailed = "取色失败，请换一张图片"
+        monetExtracting = "正在提取主色…", monetFailed = "取色失败，请换一张图片",
+        themeSettings = "主题设置", themeFollowSystem = "跟随系统", themeLight = "浅色", themeDark = "深色",
+        monetEnable = "启用 Monet 颜色", monetAccent = "强调色",
+        monetAccentDefault = "默认", monetAccentCustom = "自定义",
+        barBlur = "模糊", barBlurDesc = "启用顶栏和底栏的模糊效果",
+        barFloatDesc = "使用 Apple 风格的悬浮底栏", barGlassDesc = "启用悬浮底栏的液态玻璃效果"
     )
+}
+
+/** Tab 文案（根布局底栏与主题设置页预览示意图共用）。 */
+private fun tabLabelOf(tab: Tab, s: Strings): String = when (tab) {
+    Tab.Inbox -> s.inbox
+    Tab.History -> s.history
+    Tab.Settings -> s.settings
 }
 
 enum class Tab(val icon: ImageVector) {
@@ -648,11 +765,17 @@ enum class Tab(val icon: ImageVector) {
     Settings(Icons.Default.Settings)
 }
 
-// 底栏风格，仅在 Miuix 主题下可选。持久化使用稳定字符串 key；
-// fromKey 对未知值一律回退 Float（现有悬浮底栏），禁止直接 valueOf
+// 底栏形态，仅在 Miuix 主题下可选。持久化使用稳定字符串 key；
+// fromKey 对未知值一律回退 Float（现有悬浮底栏），禁止直接 valueOf。
+// 三个取值覆盖了"悬浮 / 液态玻璃"两个开关的全部有效组合，无效组合（如悬浮关闭但液态玻璃开启）
+// 在类型层面就不存在：
+//   Float      = 悬浮开 + 液态玻璃关 → 普通悬浮底栏
+//   LiquidGlass= 悬浮开 + 液态玻璃开 → 悬浮液态玻璃底栏
+//   Edge       = 悬浮关              → 贴边底栏（液态玻璃不可用）
 enum class BarStyle(val key: String) {
     Float("float"),
-    LiquidGlass("liquid_glass");
+    LiquidGlass("liquid_glass"),
+    Edge("edge");
 
     companion object {
         fun fromKey(key: String?): BarStyle = entries.find { it.key == key } ?: Float
@@ -681,16 +804,25 @@ data class AppState(
     val isLoading: Boolean = false,
     val history: List<HistoryEmail> = emptyList(),
     val currentTab: Tab = Tab.Inbox,
-    val isDarkMode: Boolean = false,
+    // 明暗三态（跟随系统 / 浅色 / 深色）：跟随系统只在内部解析成布尔，不改变系统本身设置
+    val themeMode: ThemeMode = ThemeMode.Light,
     val language: String = "zh",
     val autoCheckUpdate: Boolean = true,
     val themeStyle: ThemeStyle = ThemeStyle.Material3,
     val barStyle: BarStyle = BarStyle.Float,
-    // 动态配色（默认关闭）：seed = NoDynamicSeed 时 Material3 配色与定制前完全一致
+    // 模糊总开关：关闭后液态玻璃底栏退化为不带模糊的普通底栏（低版本仍可正常显示）
+    val glassBlurEnabled: Boolean = true,
+    // 动态配色（默认关闭）：seed = NoDynamicSeed 时两套主题的配色都与定制前完全一致
     val dynamicSeed: Int = NoDynamicSeed,
     val dynamicStyle: DynamicStyle = DynamicStyle.TonalSpot,
     val dynamicContrast: Float = 0f
 )
+
+/** 明暗三态读取：优先新键 themeMode，旧版本只有布尔 isDarkMode，做一次性兼容读取。 */
+private fun readThemeMode(prefs: android.content.SharedPreferences): ThemeMode {
+    prefs.getString("themeMode", null)?.let { return ThemeMode.fromKey(it) }
+    return if (prefs.getBoolean("isDarkMode", false)) ThemeMode.Dark else ThemeMode.Light
+}
 
 private val disclaimerText = """
 临时邮箱服务免责声明
@@ -743,10 +875,11 @@ class MainActivity : ComponentActivity() {
             var state by rememberSaveable(stateSaver = AppStateSaver) {
                 mutableStateOf(AppState(
                     language = prefs.getString("language", "zh") ?: "zh",
-                    isDarkMode = prefs.getBoolean("isDarkMode", false),
+                    themeMode = readThemeMode(prefs),
                     autoCheckUpdate = prefs.getBoolean("autoCheckUpdate", true),
                     themeStyle = ThemeStyle.fromKey(prefs.getString("themeStyle", ThemeStyle.Material3.key)),
                     barStyle = BarStyle.fromKey(prefs.getString("barStyle", BarStyle.Float.key)),
+                    glassBlurEnabled = prefs.getBoolean("glassBlurEnabled", true),
                     dynamicSeed = prefs.getInt("dynamicSeed", NoDynamicSeed),
                     dynamicStyle = DynamicStyle.fromKey(prefs.getString("dynamicStyle", DynamicStyle.TonalSpot.key)),
                     dynamicContrast = prefs.getFloat("dynamicContrast", 0f)
@@ -756,13 +889,26 @@ class MainActivity : ComponentActivity() {
             val scope = rememberCoroutineScope()
             val s = strings(state.language)
 
-            // 应用内深色开关与系统夜间模式相互独立，状态栏/导航栏图标颜色需跟随应用主题
+            // 设置页当前子页放在根布局持有（而不是设置页内部）：
+            // 底栏形态切换会让 GlassShell 走不同的布局分支（Scaffold ↔ 玻璃 Box+Scaffold），
+            // 分支切换会改变该子树的组合 key，状态若留在分支内部就会被重置——
+            // 表现就是"一改液态玻璃/模糊就闪回设置主页"。放在分支之外即可保持当前子页。
+            val settingsPageState = rememberSaveable(stateSaver = SettingsPageSaver) {
+                mutableStateOf(SettingsPage.Main)
+            }
+
+            // 明暗三态解析成实际要用的布尔：跟随系统时与系统夜间模式实时同步，
+            // 浅色/深色为显式覆盖。整棵 UI 树只认这个 darkTheme，不再各自读系统设置。
+            val systemDark = isSystemInDarkTheme()
+            val darkTheme = state.themeMode.isDark(systemDark)
+
+            // 状态栏/导航栏图标颜色需跟随应用实际明暗（跟随系统时会随系统切换一起变）
             val view = LocalView.current
-            LaunchedEffect(state.isDarkMode) {
+            LaunchedEffect(darkTheme) {
                 val window = (view.context as? Activity)?.window ?: return@LaunchedEffect
                 WindowCompat.getInsetsController(window, view).apply {
-                    isAppearanceLightStatusBars = !state.isDarkMode
-                    isAppearanceLightNavigationBars = !state.isDarkMode
+                    isAppearanceLightStatusBars = !darkTheme
+                    isAppearanceLightNavigationBars = !darkTheme
                 }
             }
 
@@ -990,26 +1136,21 @@ class MainActivity : ComponentActivity() {
             }
 
             TempMailTheme(
-                darkTheme = state.isDarkMode,
+                darkTheme = darkTheme,
                 themeStyle = state.themeStyle,
-                // 动态配色：仅在 Material3 主题下生效；未启用时传 null，配色与定制前完全一致
+                // 动态配色：未启用时传 null，两套主题的配色都与定制前完全一致
                 dynamicSeed = state.dynamicSeed.takeIf { it != NoDynamicSeed },
                 dynamicStyle = state.dynamicStyle,
                 dynamicContrast = state.dynamicContrast
             ) {
                 // 两套主题共用同一份页面内容，仅外层布局与底栏形态不同
-                val tabLabel: (Tab) -> String = { tab ->
-                    when (tab) {
-                        Tab.Inbox -> s.inbox
-                        Tab.History -> s.history
-                        Tab.Settings -> s.settings
-                    }
-                }
+                val tabLabel: (Tab) -> String = { tab -> tabLabelOf(tab, s) }
                 // 真·液态玻璃：HyperOS 主题 + 液态玻璃底栏 + API 33+（RuntimeShader）时启用，
                 // 内容铺满整屏并挂 backdrop 图层，底栏浮于其上做真实模糊/折射；否则走原有布局。
                 // glassOverlap 为页面滚动内容末尾需预留的底栏高度，避免最后一项被底栏遮挡。
                 val glassActive = state.themeStyle == ThemeStyle.HyperOS &&
                     state.barStyle == BarStyle.LiquidGlass &&
+                    state.glassBlurEnabled &&
                     !showDisclaimer && isGlassBlurSupported()
                 val glassOverlap = if (glassActive) GlassBarSpace else 0.dp
                 // 一次性提示：首次启用液态玻璃底栏时告知"长按可拖动切换"
@@ -1101,12 +1242,12 @@ class MainActivity : ComponentActivity() {
                                     history = filteredHistory
                                 )
                             }
-                            Tab.Settings -> SettingsTab(contentPadding, glassOverlap, state, s, snackbar, scope, client, onCheckUpdate = { manual -> checkUpdate(manual) }) { newState ->
+                            Tab.Settings -> SettingsTab(contentPadding, glassOverlap, state, s, snackbar, scope, client, settingsPageState, onCheckUpdate = { manual -> checkUpdate(manual) }) { newState ->
                                 if (newState.language != state.language) {
                                     prefs.edit().putString("language", newState.language).apply()
                                 }
-                                if (newState.isDarkMode != state.isDarkMode) {
-                                    prefs.edit().putBoolean("isDarkMode", newState.isDarkMode).apply()
+                                if (newState.themeMode != state.themeMode) {
+                                    prefs.edit().putString("themeMode", newState.themeMode.key).apply()
                                 }
                                 if (newState.autoCheckUpdate != state.autoCheckUpdate) {
                                     prefs.edit().putBoolean("autoCheckUpdate", newState.autoCheckUpdate).apply()
@@ -1116,6 +1257,9 @@ class MainActivity : ComponentActivity() {
                                 }
                                 if (newState.barStyle != state.barStyle) {
                                     prefs.edit().putString("barStyle", newState.barStyle.key).apply()
+                                }
+                                if (newState.glassBlurEnabled != state.glassBlurEnabled) {
+                                    prefs.edit().putBoolean("glassBlurEnabled", newState.glassBlurEnabled).apply()
                                 }
                                 if (newState.dynamicSeed != state.dynamicSeed) {
                                     prefs.edit().putInt("dynamicSeed", newState.dynamicSeed).apply()
@@ -1134,52 +1278,69 @@ class MainActivity : ComponentActivity() {
 
                 // 真·液态玻璃：HyperOS 主题 + 液态玻璃底栏 + API 33+（RuntimeShader）时启用，
                 // 内容铺满整屏并挂 backdrop 图层，底栏浮于其上做真实模糊/折射；否则走原有布局
-                GlassShell(
-                    glass = glassActive,
-                    darkTheme = state.isDarkMode,
-                    items = Tab.entries.map { GlassBarItem(it.icon, tabLabel(it)) },
-                    selectedIndex = Tab.entries.indexOf(state.currentTab),
-                    onSelect = { state = state.copy(currentTab = Tab.entries[it]) },
-                    snackbarHost = { SnackbarHost(snackbar) },
-                    fallbackBar = {
-                        if (!showDisclaimer) {
-                            if (state.themeStyle == ThemeStyle.Material3) {
-                                // Material3：原始默认样式（与底栏定制前完全一致）
-                                NavigationBar {
-                                    Tab.entries.forEach { tab ->
-                                        NavigationBarItem(
-                                            selected = state.currentTab == tab,
-                                            onClick = { state = state.copy(currentTab = tab) },
-                                            icon = { Icon(tab.icon, tabLabel(tab)) },
-                                            label = { Text(tabLabel(tab)) }
-                                        )
+                // 外层 Box：让"主题变更过渡层"成为 GlassShell 的兄弟节点，才能盖住包括底栏在内的整屏
+                Box(Modifier.fillMaxSize()) {
+                    GlassShell(
+                        glass = glassActive,
+                        darkTheme = darkTheme,
+                        items = Tab.entries.map { GlassBarItem(it.icon, tabLabel(it)) },
+                        selectedIndex = Tab.entries.indexOf(state.currentTab),
+                        onSelect = { state = state.copy(currentTab = Tab.entries[it]) },
+                        snackbarHost = { SnackbarHost(snackbar) },
+                        fallbackBar = {
+                            if (!showDisclaimer) {
+                                if (state.themeStyle == ThemeStyle.Material3) {
+                                    // Material3：原始默认样式（与底栏定制前完全一致）
+                                    NavigationBar {
+                                        Tab.entries.forEach { tab ->
+                                            NavigationBarItem(
+                                                selected = state.currentTab == tab,
+                                                onClick = { state = state.copy(currentTab = tab) },
+                                                icon = { Icon(tab.icon, tabLabel(tab)) },
+                                                label = { Text(tabLabel(tab)) }
+                                            )
+                                        }
                                     }
-                                }
-                            } else {
-                                // Miuix：底栏风格可选（Material3 主题不提供，保持原样）
-                                when (state.barStyle) {
-                                    BarStyle.LiquidGlass -> LiquidGlassBottomBar(
-                                        current = state.currentTab,
-                                        label = tabLabel,
-                                        onSelect = { state = state.copy(currentTab = it) }
-                                    )
-                                    BarStyle.Float -> MiuixFloatingBottomBar(
-                                        current = state.currentTab,
-                                        label = tabLabel,
-                                        onSelect = { state = state.copy(currentTab = it) }
-                                    )
+                                } else {
+                                    // Miuix：底栏形态可选（Material3 主题不提供，保持原样）。
+                                    // 用 Crossfade 包一层：切换形态时淡入淡出过渡，避免生硬跳变
+                                    Crossfade(
+                                        targetState = state.barStyle,
+                                        animationSpec = tween(THEME_ANIM_MS),
+                                        label = "barStyle"
+                                    ) { barStyle ->
+                                        when (barStyle) {
+                                            BarStyle.LiquidGlass -> LiquidGlassBottomBar(
+                                                current = state.currentTab,
+                                                label = tabLabel,
+                                                onSelect = { state = state.copy(currentTab = it) }
+                                            )
+                                            BarStyle.Float -> MiuixFloatingBottomBar(
+                                                current = state.currentTab,
+                                                label = tabLabel,
+                                                onSelect = { state = state.copy(currentTab = it) }
+                                            )
+                                            BarStyle.Edge -> MiuixEdgeBottomBar(
+                                                current = state.currentTab,
+                                                label = tabLabel,
+                                                onSelect = { state = state.copy(currentTab = it) }
+                                            )
+                                        }
+                                    }
                                 }
                             }
                         }
+                    ) { p ->
+                        if (showDisclaimer) {
+                            disclaimerPage(
+                                Modifier.fillMaxSize().statusBarsPadding().padding(p).padding(horizontal = 24.dp)
+                            )
+                        } else {
+                            tabPages(p)
+                        }
                     }
-                ) { p ->
-                    if (showDisclaimer) {
-                        disclaimerPage(
-                            Modifier.fillMaxSize().statusBarsPadding().padding(p).padding(horizontal = 24.dp)
-                        )
-                    } else {
-                        tabPages(p)
-                    }
+                    // 配色过渡由主题层的逐 token 动画负责（见 TempMailTheme / animateColorScheme），
+                    // 这里不再需要"旧底色遮罩"——那种做法会在切换后先闪一帧新配色再盖上遮罩
                 }
                 if (showUpdateDialog) {
                     AlertDialog(
@@ -1231,7 +1392,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-// ==================== Miuix 主题底栏（两种风格可选） ====================
+// ==================== Miuix 主题底栏（三种形态可选） ====================
 
 /**
  * Miuix 悬浮底栏：既有样式，视觉与行为保持与定制前一致。
@@ -1245,7 +1406,8 @@ private fun MiuixFloatingBottomBar(
     // 指示器必须用不透明色：M3 绘制时以 .copy(alpha = animationProgress)
     // 覆盖该色的 alpha（选中稳定后为 1f），传入带透明度的颜色会被静默还原成实心色。
     // 故按 12% 比例预先合成到容器色上，亮/暗模式均自动匹配底色。
-    val barColor = MaterialTheme.colorScheme.surfaceVariant
+    // 容器色走主题桥接：开启莫奈后取带色调的 Miuix 容器色，不再是固定白色
+    val barColor = themedBarContainerColor()
     val indicatorColor = MaterialTheme.colorScheme.primary
         .copy(alpha = 0.12f)
         .compositeOver(barColor)
@@ -1293,6 +1455,59 @@ private fun MiuixFloatingBottomBar(
 }
 
 /**
+ * 贴边底栏：悬浮关闭时的形态（对应参考图7）。
+ * 与悬浮底栏同一套色板与选中态规则，但**不浮起**——铺满整宽、不留横向边距、不投影，
+ * 靠顶部一条细分隔线与内容分层，底栏背景一直延伸到屏幕底边。
+ */
+@Composable
+private fun MiuixEdgeBottomBar(
+    current: Tab,
+    label: (Tab) -> String,
+    onSelect: (Tab) -> Unit
+) {
+    val barColor = themedBarContainerColor()
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .background(barColor)
+    ) {
+        ThemedDivider()
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .windowInsetsPadding(WindowInsets.navigationBars)
+                .height(56.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Tab.entries.forEach { tab ->
+                val selected = current == tab
+                val contentColor = if (selected) MaterialTheme.colorScheme.primary
+                else MaterialTheme.colorScheme.onSurfaceVariant
+                Column(
+                    Modifier
+                        .weight(1f)
+                        .fillMaxHeight()
+                        .selectable(
+                            selected = selected,
+                            interactionSource = null,
+                            indication = null,
+                            role = Role.Tab,
+                            onClick = { onSelect(tab) }
+                        ),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(2.dp, Alignment.CenterVertically)
+                ) {
+                    Icon(tab.icon, label(tab), tint = contentColor,
+                        modifier = Modifier.size(24.dp))
+                    Text(label(tab), style = MaterialTheme.typography.labelSmall,
+                        color = contentColor)
+                }
+            }
+        }
+    }
+}
+
+/**
  * 液态玻璃底栏（伪玻璃回退实现，用于 API 33 以下或模糊不可用的设备）：
  * 视觉与交互规格参考 skill-liquid-glass
  * （玻璃本体 + 高光描边 + 外层柔和阴影 + 滑动指示器 + 按压缩放回弹）。
@@ -1327,10 +1542,12 @@ private fun LiquidGlassBottomBar(
             scheme.primary.copy(alpha = 0.22f)
         )
     )
+    // 不透明基底色：走主题桥接，开启莫奈后为带色调的 Miuix 容器色（未开启时与原来的 surface 同值）
+    val baseColor = themedBarContainerColor()
     // 指示器由本组件自行绘制（不经过 M3 NavigationBar），故可直接使用半透明色，
     // 预合成到基底色上以保证在深浅两种背景下都有足够存在感
     val indicatorColor = scheme.primary.copy(alpha = 0.16f)
-        .compositeOver(scheme.surface)
+        .compositeOver(baseColor)
     Box(
         modifier = Modifier
             .windowInsetsPadding(WindowInsets.navigationBars)
@@ -1344,7 +1561,7 @@ private fun LiquidGlassBottomBar(
             Modifier
                 .matchParentSize()
                 .shadow(elevation = 10.dp, shape = glassShape, clip = true)
-                .background(scheme.surface, glassShape)
+                .background(baseColor, glassShape)
         )
         BoxWithConstraints(
             Modifier
@@ -1855,7 +2072,20 @@ private fun HistoryTab(
     }
 }
 
-private enum class SettingsPage { Main, Language, DarkMode, Theme, BarStyle, Monet, About, Author }
+private enum class SettingsPage { Main, Language, DarkMode, Theme, Monet, ThemeSettings, About, Author }
+
+/** 用序号持久化子页（配置变更 / 进程重建后回到原页面，越界时回退设置主页）。 */
+private val SettingsPageSaver: Saver<SettingsPage, Int> = Saver(
+    save = { it.ordinal },
+    restore = { SettingsPage.entries.getOrElse(it) { SettingsPage.Main } }
+)
+
+/** 明暗三态的显示文案（设置主页的值、深色模式子页、主题设置页的分段控件共用）。 */
+private fun themeModeLabel(mode: ThemeMode, s: Strings): String = when (mode) {
+    ThemeMode.System -> s.themeFollowSystem
+    ThemeMode.Light -> s.themeLight
+    ThemeMode.Dark -> s.themeDark
+}
 
 @Composable
 private fun SettingsTab(
@@ -1866,10 +2096,12 @@ private fun SettingsTab(
     snackbar: SnackbarHostState,
     scope: CoroutineScope,
     client: OkHttpClient,
+    pageState: MutableState<SettingsPage>,
     onCheckUpdate: (Boolean) -> Unit,
     onState: (AppState) -> Unit
 ) {
-    var page by remember { mutableStateOf(SettingsPage.Main) }
+    // 子页状态由根布局持有（见 setContent 中的说明）：底栏布局分支切换时不会被重置
+    var page by pageState
     val ctx = LocalContext.current
     BackHandler(page != SettingsPage.Main) { page = SettingsPage.Main }
 
@@ -1903,29 +2135,31 @@ private fun SettingsTab(
                                         value = allLanguages.find { it.code == state.language }?.label ?: "中文",
                                         onClick = { page = SettingsPage.Language }
                                     )
-                                    ThemedDivider(modifier = Modifier.padding(horizontal = 16.dp))
-                                    SettingsItem(
-                                        label = s.darkMode,
-                                        value = if (state.isDarkMode) "ON" else "OFF",
-                                        onClick = { page = SettingsPage.DarkMode }
-                                    )
+                                    // 明暗模式与底栏选项：HyperOS 主题下合并进「主题设置」，
+                                    // Material3 主题下沿用原有的独立入口，两者不重复出现
+                                    if (state.themeStyle == ThemeStyle.HyperOS) {
+                                        ThemedDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                                        SettingsItem(
+                                            label = s.themeSettings,
+                                            value = themeModeLabel(state.themeMode, s),
+                                            onClick = { page = SettingsPage.ThemeSettings }
+                                        )
+                                    } else {
+                                        ThemedDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                                        SettingsItem(
+                                            label = s.darkMode,
+                                            value = themeModeLabel(state.themeMode, s),
+                                            onClick = { page = SettingsPage.DarkMode }
+                                        )
+                                    }
                                     ThemedDivider(modifier = Modifier.padding(horizontal = 16.dp))
                                     SettingsItem(
                                         label = s.themeStyle,
                                         value = if (state.themeStyle == ThemeStyle.HyperOS) s.themeHyperOS else s.themeDefault,
                                         onClick = { page = SettingsPage.Theme }
                                     )
-                                    // 底栏风格仅在 Miuix 主题下提供，Material3 主题保持原样
-                                    if (state.themeStyle == ThemeStyle.HyperOS) {
-                                        ThemedDivider(modifier = Modifier.padding(horizontal = 16.dp))
-                                        SettingsItem(
-                                            label = s.barStyle,
-                                            value = if (state.barStyle == BarStyle.LiquidGlass) s.barStyleGlass else s.barStyleFloat,
-                                            onClick = { page = SettingsPage.BarStyle }
-                                        )
-                                    }
-                                    // 动态配色只在 Material3 主题下生效（Miuix 配色固定），
-                                    // 与上面"底栏风格仅在 Miuix 下提供"正好互补
+                                    // 动态配色入口只在 Material3 主题下保留：
+                                    // HyperOS 主题的取色入口在「主题设置」页内，避免两处重复
                                     if (state.themeStyle == ThemeStyle.Material3) {
                                         ThemedDivider(modifier = Modifier.padding(horizontal = 16.dp))
                                         SettingsItem(
@@ -1993,17 +2227,15 @@ private fun SettingsTab(
                             Text(s.darkModeSetting, style = MaterialTheme.typography.headlineSmall)
                             Spacer(Modifier.height(20.dp))
 
+                            // 三态：跟随系统 / 浅色 / 深色（与 Miuix 主题设置页保持一致）
                             ThemedCard(Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.large) {
-                                Row(
-                                    Modifier.padding(horizontal = 20.dp, vertical = 16.dp).fillMaxWidth(),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Text(s.darkMode, style = MaterialTheme.typography.bodyLarge,
-                                        modifier = Modifier.weight(1f))
-                                    ThemedSwitch(
-                                        checked = state.isDarkMode,
-                                        onCheckedChange = { onState(state.copy(isDarkMode = it)) }
-                                    )
+                                Column {
+                                    ThemeMode.entries.forEachIndexed { index, mode ->
+                                        if (index > 0) ThemedDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                                        LanguageOption(themeModeLabel(mode, s), state.themeMode == mode) {
+                                            onState(state.copy(themeMode = mode))
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -2027,24 +2259,14 @@ private fun SettingsTab(
                             }
                         }
 
-                        SettingsPage.BarStyle -> {
-                            ThemedIconButton(onClick = { page = SettingsPage.Main }) {
-                                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = s.back)
-                            }
-                            Spacer(Modifier.height(8.dp))
-                            Text(s.barStyle, style = MaterialTheme.typography.headlineSmall)
-                            Spacer(Modifier.height(20.dp))
-
-                            ThemedCard(Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.large) {
-                                Column {
-                                    LanguageOption(s.barStyleFloat, state.barStyle == BarStyle.Float,
-                                        onClick = { onState(state.copy(barStyle = BarStyle.Float)); page = SettingsPage.Main })
-                                    ThemedDivider(modifier = Modifier.padding(horizontal = 16.dp))
-                                    LanguageOption(s.barStyleGlass, state.barStyle == BarStyle.LiquidGlass,
-                                        onClick = { onState(state.copy(barStyle = BarStyle.LiquidGlass)); page = SettingsPage.Main })
-                                }
-                            }
-                        }
+                        SettingsPage.ThemeSettings -> ThemeSettingsPage(
+                            state = state,
+                            s = s,
+                            snackbar = snackbar,
+                            scope = scope,
+                            onState = onState,
+                            onBack = { page = SettingsPage.Main }
+                        )
 
                         SettingsPage.Monet -> MonetPage(
                             state = state,
@@ -2130,8 +2352,503 @@ private fun SettingsTab(
 }
 
 /**
+ * Miuix 风格「主题设置」子页（排版参照参考图）：
+ *   居中标题 + 手机预览示意图 → 明暗三选一 → 卡片1（莫奈开关 / 强调色）→ 卡片2（底栏选项）。
+ *
+ * 仅在 HyperOS 主题下可达（入口在设置主页），页面元素全部经 ui/theme/MiuixComponents.kt 的
+ * Themed* 桥接，HyperOS 下渲染为真正的 Miuix 组件；配色与 Material3 版莫奈页共用同一份
+ * dynamicSeed / dynamicStyle，因此两套主题的取色结果始终一致。
+ *
+ * 生效方式：**实时生效**。本页任何改动都立刻写回全局状态，预览区域与当前界面（含底栏）
+ * 同步更新，改完不需要返回主界面即可看到效果；页面本身留在原地，方便连续调整。
+ * 预览区域与真实界面同源取色（themedSurfaceColors），并用动画平滑过渡（颜色 / 尺寸 / 底栏形态）。
+ */
+@Composable
+private fun ThemeSettingsPage(
+    state: AppState,
+    s: Strings,
+    snackbar: SnackbarHostState,
+    scope: CoroutineScope,
+    onState: (AppState) -> Unit,
+    onBack: () -> Unit
+) {
+    val ctx = LocalContext.current
+    var extracting by remember { mutableStateOf(false) }
+    var accentMenuOpen by remember { mutableStateOf(false) }
+
+    val monetOn = state.dynamicSeed != NoDynamicSeed
+    val floatingOn = state.barStyle != BarStyle.Edge
+
+    // 相册取色：与 Material3 版莫奈页共用同一条链路（SeedExtractor 内部切 IO 线程）
+    val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        scope.launch {
+            extracting = true
+            val seed = extractSeedFromUri(ctx, uri)
+            extracting = false
+            if (seed != null) onState(state.copy(dynamicSeed = seed))
+            else snackbar.showSnackbar(s.monetFailed)
+        }
+    }
+
+    // 标题栏：左返回 + 居中大标题（改动已实时生效，返回只是离开本页）
+    Box(Modifier.fillMaxWidth()) {
+        ThemedIconButton(onClick = onBack, modifier = Modifier.align(Alignment.CenterStart)) {
+            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = s.back)
+        }
+        Text(s.themeSettings, style = MaterialTheme.typography.headlineSmall,
+            modifier = Modifier.align(Alignment.Center))
+    }
+    Spacer(Modifier.height(20.dp))
+
+    // 预览区域：与真实界面同源取色，实时反映明暗 / 种子色 / 底栏形态
+    Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+        ThemePreviewMock(
+            barStyle = state.barStyle,
+            label = { tab -> tabLabelOf(tab, s) }
+        )
+    }
+    Spacer(Modifier.height(28.dp))
+
+    // 明暗三选一：跟随系统 / 浅色 / 深色
+    ThemedSegmentedTabs(
+        tabs = ThemeMode.entries.map { themeModeLabel(it, s) },
+        selectedIndex = ThemeMode.entries.indexOf(state.themeMode),
+        onSelect = { onState(state.copy(themeMode = ThemeMode.entries[it])) }
+    )
+    Spacer(Modifier.height(16.dp))
+
+    // 卡片1：莫奈取色
+    ThemedCard(Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.large) {
+        Column {
+            ThemedListRow(
+                title = s.monetEnable,
+                icon = { ImageFrameIcon(MaterialTheme.colorScheme.onSurface) },
+                trailing = {
+                    ThemedSwitch(
+                        checked = monetOn,
+                        onCheckedChange = { on ->
+                            // 开启时先落到「默认」强调色（应用主色蓝），随后可再选预设或图片
+                            onState(state.copy(dynamicSeed = if (on) DefaultMonetSeed else NoDynamicSeed))
+                        }
+                    )
+                }
+            )
+            ThemedDivider(modifier = Modifier.padding(horizontal = 16.dp))
+            ThemedListRow(
+                title = s.monetAccent,
+                icon = { Icon(Icons.Default.Edit, contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(24.dp)) },
+                onClick = { accentMenuOpen = true },
+                trailing = {
+                    ThemedDropdownValue(
+                        text = if (monetOn && state.dynamicSeed != DefaultMonetSeed)
+                            s.monetAccentCustom else s.monetAccentDefault,
+                        onClick = { accentMenuOpen = true }
+                    )
+                }
+            )
+            // 零高度锚点：紧贴该行下方，弹出菜单以它为基准向下展开
+            Box(Modifier.fillMaxWidth().height(0.dp)) {
+                AccentDropdown(
+                    expanded = accentMenuOpen,
+                    selectedSeed = state.dynamicSeed,
+                    extracting = extracting,
+                    s = s,
+                    onDismiss = { accentMenuOpen = false },
+                    onPick = { seed -> onState(state.copy(dynamicSeed = seed)) },
+                    onPickImage = {
+                        accentMenuOpen = false
+                        picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                    }
+                )
+            }
+        }
+    }
+
+    Spacer(Modifier.height(16.dp))
+
+    // 卡片2：底栏相关
+    // 状态机（BarStyle，三项枚举让"无效组合"从类型上就不存在）：
+    //   悬浮关 → 贴边底栏（图7 的贴边样式，液态玻璃不可用）
+    //   悬浮开 + 液态玻璃关 → 普通悬浮底栏
+    //   悬浮开 + 液态玻璃开 → 悬浮液态玻璃底栏
+    ThemedCard(Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.large) {
+        Column {
+            ThemedListRow(
+                title = s.barStyleFloat,
+                summary = s.barFloatDesc,
+                icon = { FloatingBarIcon(MaterialTheme.colorScheme.onSurface) },
+                trailing = {
+                    ThemedSwitch(
+                        checked = floatingOn,
+                        onCheckedChange = { on ->
+                            // 关掉悬浮时液态玻璃一并关闭（贴边底栏没有玻璃形态）
+                            onState(state.copy(barStyle = if (on) BarStyle.Float else BarStyle.Edge))
+                        }
+                    )
+                }
+            )
+            ThemedDivider(modifier = Modifier.padding(horizontal = 16.dp))
+            ThemedListRow(
+                title = s.barStyleGlass,
+                summary = s.barGlassDesc,
+                icon = { GlassDropIcon(MaterialTheme.colorScheme.onSurface) },
+                trailing = {
+                    ThemedSwitch(
+                        checked = state.barStyle == BarStyle.LiquidGlass,
+                        enabled = floatingOn,
+                        onCheckedChange = { on ->
+                            onState(state.copy(barStyle = if (on) BarStyle.LiquidGlass else BarStyle.Float))
+                        }
+                    )
+                }
+            )
+            ThemedDivider(modifier = Modifier.padding(horizontal = 16.dp))
+            ThemedListRow(
+                title = s.barBlur,
+                summary = s.barBlurDesc,
+                icon = { BlurDotsIcon(MaterialTheme.colorScheme.onSurface) },
+                trailing = {
+                    // 模糊只作用于液态玻璃底栏：未选中玻璃时该项不可用，避免出现"无效组合"
+                    ThemedSwitch(
+                        checked = state.glassBlurEnabled,
+                        enabled = state.barStyle == BarStyle.LiquidGlass,
+                        onCheckedChange = { onState(state.copy(glassBlurEnabled = it)) }
+                    )
+                }
+            )
+        }
+    }
+    Spacer(Modifier.height(24.dp))
+}
+
+/** 图片取色图标：圆角画框 + 太阳 + 山形（Material 图标集中没有 image，这里按参考图手绘）。 */
+@Composable
+private fun ImageFrameIcon(tint: Color) {
+    Canvas(Modifier.size(24.dp)) {
+        val stroke = size.width * 0.085f
+        drawRoundRect(
+            color = tint,
+            topLeft = Offset(stroke / 2f, stroke / 2f),
+            size = Size(size.width - stroke, size.height - stroke),
+            cornerRadius = CornerRadius(size.width * 0.2f),
+            style = Stroke(width = stroke)
+        )
+        drawCircle(color = tint, radius = size.width * 0.075f,
+            center = Offset(size.width * 0.33f, size.height * 0.35f))
+        val hill = Path().apply {
+            moveTo(size.width * 0.20f, size.height * 0.76f)
+            lineTo(size.width * 0.43f, size.height * 0.50f)
+            lineTo(size.width * 0.60f, size.height * 0.68f)
+            lineTo(size.width * 0.70f, size.height * 0.58f)
+            lineTo(size.width * 0.80f, size.height * 0.76f)
+            close()
+        }
+        drawPath(hill, tint)
+    }
+}
+
+/**
+ * 手机预览示意图（实时预览）：完整反映当前主题的各处变化——
+ *   - 配色：页面底色 / 卡片 / 强调容器 / 强调色 / 文字色，全部取自 themedSurfaceColors()
+ *     （HyperOS 下就是 Miuix 组件真正在用的那套颜色），并用 260ms 颜色动画平滑过渡；
+ *   - 底栏形态：悬浮（内缩 + 圆角 + 抬离底边）↔ 贴边（满宽 + 直角 + 紧贴底边）之间平滑位移/形变；
+ *   - 尺寸与圆角：机身与色块的圆角取自当前主题的 shapes token，因此换主题风格时形状随之变化；
+ *   - 字体：底栏项文字用当前主题的 labelSmall 渲染，字体样式变化同样可见。
+ */
+@Composable
+private fun ThemePreviewMock(
+    barStyle: BarStyle,
+    label: (Tab) -> String,
+    modifier: Modifier = Modifier
+) {
+    val colors = themedSurfaceColors()
+    val shapeSpec = tween<Color>(THEME_ANIM_MS)
+    val sizeSpec = tween<Dp>(THEME_ANIM_MS)
+
+    // 颜色：全部带动画，明暗/种子色切换时平滑渐变
+    val background by animateColorAsState(colors.background, shapeSpec, label = "previewBackground")
+    val card by animateColorAsState(colors.card, shapeSpec, label = "previewCard")
+    val accent by animateColorAsState(colors.primary, shapeSpec, label = "previewAccent")
+    val accentContainer by animateColorAsState(colors.primaryContainer, shapeSpec, label = "previewAccentContainer")
+    val onSurface by animateColorAsState(colors.onSurface, shapeSpec, label = "previewOnSurface")
+    val outline by animateColorAsState(colors.outlineVariant, shapeSpec, label = "previewOutline")
+
+    // 形状：跟随主题的 shapes token（Material3 / Miuix 的圆角层级不同）
+    val shapes = MaterialTheme.shapes
+    val bodyRadius by animateDpAsState(cornerRadiusOf(shapes.extraLarge), sizeSpec, label = "previewBodyRadius")
+    val blockRadius by animateDpAsState(cornerRadiusOf(shapes.small), sizeSpec, label = "previewBlockRadius")
+
+    // 底栏形态：悬浮 = 内缩 + 圆角 + 抬离底边；贴边 = 满宽 + 直角 + 紧贴底边
+    val floating = barStyle != BarStyle.Edge
+    val barInset by animateDpAsState(if (floating) 8.dp else 0.dp, sizeSpec, label = "previewBarInset")
+    val barCorner by animateDpAsState(if (floating) blockRadius else 0.dp, sizeSpec, label = "previewBarCorner")
+    val barLift by animateDpAsState(if (floating) 6.dp else 0.dp, sizeSpec, label = "previewBarLift")
+    val barHeight by animateDpAsState(if (floating) 30.dp else 34.dp, sizeSpec, label = "previewBarHeight")
+
+    Box(
+        modifier = modifier
+            .width(132.dp)
+            .height(206.dp)
+            .clip(RoundedCornerShape(bodyRadius))
+            .background(background)
+            .border(1.5.dp, outline, RoundedCornerShape(bodyRadius))
+    ) {
+        // 内容区（含底部为底栏预留的高度，避免与底栏重叠）
+        Column(
+            Modifier
+                .fillMaxSize()
+                .padding(start = 10.dp, top = 10.dp, end = 10.dp)
+                .padding(bottom = barHeight + barLift + 6.dp)
+        ) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Box(Modifier.weight(1f).height(30.dp)
+                    .clip(RoundedCornerShape(blockRadius)).background(accentContainer))
+                Box(Modifier.weight(1f).height(30.dp)
+                    .clip(RoundedCornerShape(blockRadius)).background(card))
+            }
+            Spacer(Modifier.height(8.dp))
+            Box(Modifier.fillMaxWidth().weight(1f)
+                .clip(RoundedCornerShape(blockRadius)).background(card))
+        }
+
+        // 底栏：与真实底栏同构（4 个项 + 首项强调色），形态随 BarStyle 平滑变化
+        Column(
+            Modifier
+                .align(Alignment.BottomCenter)
+                .padding(start = barInset, end = barInset, bottom = barLift)
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(barCorner))
+                .background(card)
+        ) {
+            // 贴边形态用一条顶部分割线与内容分层（悬浮形态下分割线随圆角淡出）
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .height(1.dp)
+                    .graphicsLayer { alpha = if (floating) 0f else 1f }
+                    .background(outline)
+            )
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .height(barHeight)
+                    .padding(horizontal = if (floating) 6.dp else 10.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Tab.entries.forEachIndexed { index, tab ->
+                    val selected = index == 0
+                    Column(
+                        Modifier.weight(1f),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(2.dp, Alignment.CenterVertically)
+                    ) {
+                        Box(
+                            Modifier
+                                .size(12.dp)
+                                .clip(RoundedCornerShape(3.dp))
+                                .background(if (selected) accent else onSurface)
+                        )
+                        Text(
+                            text = label(tab),
+                            // 沿用主题 labelSmall 的字体族与字重，只把字号缩到示意用的尺寸
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                fontSize = 7.sp,
+                                lineHeight = 8.sp
+                            ),
+                            color = if (selected) accent else onSurface,
+                            maxLines = 1,
+                            softWrap = false
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** 模糊图标：半调网点（呼应参考图里的模糊图标）。 */
+@Composable
+private fun BlurDotsIcon(tint: Color) {
+    Canvas(Modifier.size(24.dp)) {
+        val step = size.width / 4f
+        repeat(4) { row ->
+            repeat(4) { col ->
+                // 右下角逐渐变淡变小，形成"虚化"观感
+                val fade = 1f - (row + col) / 7f
+                drawCircle(
+                    color = tint.copy(alpha = 0.35f + 0.65f * fade),
+                    radius = step * 0.17f * (0.6f + 0.4f * fade),
+                    center = Offset(step * (col + 0.5f), step * (row + 0.5f))
+                )
+            }
+        }
+    }
+}
+
+/** 悬浮底栏图标：圆角矩形机身 + 底部的实心条。 */
+@Composable
+private fun FloatingBarIcon(tint: Color) {
+    Canvas(Modifier.size(24.dp)) {
+        val stroke = size.width * 0.085f
+        val radius = size.width * 0.2f
+        drawRoundRect(
+            color = tint,
+            topLeft = Offset(stroke / 2f, stroke / 2f),
+            size = Size(size.width - stroke, size.height - stroke),
+            cornerRadius = CornerRadius(radius),
+            style = Stroke(width = stroke)
+        )
+        val barHeight = size.height * 0.22f
+        drawRoundRect(
+            color = tint,
+            topLeft = Offset(size.width * 0.24f, size.height * 0.62f),
+            size = Size(size.width * 0.52f, barHeight),
+            cornerRadius = CornerRadius(barHeight / 2f)
+        )
+    }
+}
+
+/** 液态玻璃图标：水滴。 */
+@Composable
+private fun GlassDropIcon(tint: Color) {
+    Canvas(Modifier.size(24.dp)) {
+        val r = size.width * 0.29f
+        val center = Offset(size.width / 2f, size.height * 0.64f)
+        drawCircle(color = tint, radius = r, center = center)
+        val path = Path().apply {
+            moveTo(size.width / 2f, size.height * 0.06f)
+            lineTo(center.x + r * 0.82f, center.y - r * 0.5f)
+            lineTo(center.x - r * 0.82f, center.y - r * 0.5f)
+            close()
+        }
+        drawPath(path, tint)
+    }
+}
+
+/**
+ * 「强调色」下拉菜单：默认（应用主色蓝）/ 预设色带 / 从图片取色。
+ * 用 Popup 锚定在强调色行下方，带淡入 + 轻微缩放的过渡（与底栏放大镜的出现动效一致）。
+ */
+@Composable
+private fun AccentDropdown(
+    expanded: Boolean,
+    selectedSeed: Int,
+    extracting: Boolean,
+    s: Strings,
+    onDismiss: () -> Unit,
+    onPick: (Int) -> Unit,
+    onPickImage: () -> Unit
+) {
+    if (!expanded) return
+    val progress = remember { Animatable(0f) }
+    LaunchedEffect(Unit) { progress.animateTo(1f, tween(180)) }
+
+    Popup(
+        alignment = Alignment.TopEnd,
+        offset = IntOffset(0, 6),
+        onDismissRequest = onDismiss,
+        properties = PopupProperties(focusable = true)
+    ) {
+        ThemedCard(
+            modifier = Modifier
+                .width(268.dp)
+                .shadow(8.dp, RoundedCornerShape(20.dp))
+                .graphicsLayer {
+                    alpha = progress.value
+                    val scale = 0.94f + 0.06f * progress.value
+                    scaleX = scale
+                    scaleY = scale
+                    transformOrigin = TransformOrigin(1f, 0f)
+                },
+            shape = MaterialTheme.shapes.large
+        ) {
+            Column {
+                AccentMenuRow(
+                    label = s.monetAccentDefault,
+                    selected = selectedSeed == DefaultMonetSeed,
+                    swatch = Color(DefaultMonetSeed),
+                    onClick = { onPick(DefaultMonetSeed); onDismiss() }
+                )
+                ThemedDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                Text(
+                    s.monetPresets,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(start = 20.dp, top = 12.dp)
+                )
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState())
+                        .padding(horizontal = 16.dp, vertical = 10.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    MonetPresets.forEach { preset ->
+                        Box(
+                            Modifier
+                                .size(32.dp)
+                                .clip(CircleShape)
+                                .background(Color(preset))
+                                .border(
+                                    width = if (selectedSeed == preset) 3.dp else 1.dp,
+                                    color = if (selectedSeed == preset) MaterialTheme.colorScheme.primary
+                                    else MaterialTheme.colorScheme.outlineVariant,
+                                    shape = CircleShape
+                                )
+                                .clickable { onPick(preset); onDismiss() }
+                        )
+                    }
+                }
+                ThemedDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                AccentMenuRow(
+                    label = if (extracting) s.monetExtracting else s.monetPickImage,
+                    selected = selectedSeed != DefaultMonetSeed && selectedSeed !in MonetPresets
+                        && selectedSeed != NoDynamicSeed,
+                    icon = { Icon(Icons.Default.Create, contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(20.dp)) },
+                    onClick = onPickImage
+                )
+            }
+        }
+    }
+}
+
+/** 下拉菜单中的一行：可选色点 + 文案（选中时显示对勾）。 */
+@Composable
+private fun AccentMenuRow(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+    swatch: Color? = null,
+    icon: (@Composable () -> Unit)? = null
+) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 20.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        if (swatch != null) {
+            Box(Modifier.size(22.dp).clip(CircleShape).background(swatch))
+            Spacer(Modifier.width(14.dp))
+        } else if (icon != null) {
+            icon()
+            Spacer(Modifier.width(14.dp))
+        }
+        Text(label, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+        if (selected) {
+            Icon(Icons.Default.Check, contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
+        }
+    }
+}
+
+/**
  * 莫奈取色子页：选择图片取色 / 预设色 / 配色风格 / 对比度 / 关闭。
- * 仅在 Material3 主题下可达（Miuix 主题不提供入口，配色也不受影响）。
+ * 仅在 Material3 主题下可达（Miuix 主题的取色入口在「主题设置」页内）。
  */
 @Composable
 private fun MonetPage(
@@ -2610,10 +3327,11 @@ private fun appStateToJson(state: AppState): String {
     j.put("email", state.email)
     j.put("count", state.count)
     j.put("language", state.language)
-    j.put("isDarkMode", state.isDarkMode)
+    j.put("themeMode", state.themeMode.key)
     j.put("autoCheckUpdate", state.autoCheckUpdate)
     j.put("themeStyle", state.themeStyle.key)
     j.put("barStyle", state.barStyle.key)
+    j.put("glassBlurEnabled", state.glassBlurEnabled)
     j.put("dynamicSeed", state.dynamicSeed)
     j.put("dynamicStyle", state.dynamicStyle.key)
     j.put("dynamicContrast", state.dynamicContrast.toDouble())
@@ -2683,11 +3401,12 @@ private fun appStateFromJson(json: String): AppState? {
             isLoading = false,
             history = hist,
             currentTab = Tab.entries.getOrElse(j.optInt("tab", 0)) { Tab.Inbox },
-            isDarkMode = j.optBoolean("isDarkMode", false),
+            themeMode = ThemeMode.fromKey(j.optString("themeMode", ThemeMode.Light.key)),
             language = j.optString("language", "zh"),
             autoCheckUpdate = j.optBoolean("autoCheckUpdate", true),
             themeStyle = ThemeStyle.fromKey(j.optString("themeStyle", ThemeStyle.Material3.key)),
             barStyle = BarStyle.fromKey(j.optString("barStyle", BarStyle.Float.key)),
+            glassBlurEnabled = j.optBoolean("glassBlurEnabled", true),
             dynamicSeed = j.optInt("dynamicSeed", NoDynamicSeed),
             dynamicStyle = DynamicStyle.fromKey(j.optString("dynamicStyle", DynamicStyle.TonalSpot.key)),
             dynamicContrast = j.optDouble("dynamicContrast", 0.0).toFloat()
