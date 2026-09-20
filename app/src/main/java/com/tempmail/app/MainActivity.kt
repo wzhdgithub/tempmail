@@ -164,8 +164,7 @@ private data class Strings(
     val themeStyle: String, val themeDefault: String, val themeHyperOS: String,
     val barStyle: String, val barStyleFloat: String, val barStyleGlass: String,
     val glassHint: String,
-    // 动态配色（莫奈取色）。以下默认值即英文文案；中文在 zh 分支单独给出，
-    // 其余 13 种语言在 P4 本地化前先沿用英文默认值。
+    // 动态配色（莫奈取色）。15 种语言均已翻译，这里的默认值作为未知语言的英文兜底。
     val monet: String = "Dynamic Colors",
     val monetDesc: String = "Pick an image and its color becomes a full Material 3 theme",
     val monetPickImage: String = "Choose image",
@@ -232,7 +231,11 @@ private fun strings(lang: String): Strings = when (lang) {
         cancel = "キャンセル", rawData = "生データ:",
         authorHomepage = "作者ホームページ", projectRepo = "プロジェクトリポジトリ",
         themeStyle = "テーマ", themeDefault = "Material3", themeHyperOS = "Miuix",
-        barStyle = "ボトムバー", barStyleFloat = "フローティング", barStyleGlass = "Liquid Glass", glassHint = "バーを長押ししてドラッグでタブを切り替え"
+        barStyle = "ボトムバー", barStyleFloat = "フローティング", barStyleGlass = "Liquid Glass", glassHint = "バーを長押ししてドラッグでタブを切り替え",
+        monet = "モネの色抽出", monetDesc = "画像から1色を取り出し、Material 3 の配色一式を生成します",
+        monetPickImage = "画像を選択", monetPresets = "プリセット", monetStyle = "配色スタイル", monetContrast = "コントラスト",
+        monetContrastDefault = "標準", monetContrastHigh = "高", monetClose = "動的配色をオフ",
+        monetExtracting = "色を抽出中…", monetFailed = "色を抽出できませんでした。別の画像をお試しください"
     )
     "ko" -> Strings(
         title = "임시 메일",
@@ -259,7 +262,11 @@ private fun strings(lang: String): Strings = when (lang) {
         cancel = "취소", rawData = "원본 데이터:",
         authorHomepage = "작성자 홈페이지", projectRepo = "프로젝트 저장소",
         themeStyle = "테마", themeDefault = "Material3", themeHyperOS = "Miuix",
-        barStyle = "하단 바", barStyleFloat = "플로팅", barStyleGlass = "Liquid Glass", glassHint = "하단 바를 길게 누른 뒤 드래그해 탭 전환"
+        barStyle = "하단 바", barStyleFloat = "플로팅", barStyleGlass = "Liquid Glass", glassHint = "하단 바를 길게 누른 뒤 드래그해 탭 전환",
+        monet = "모네 색상 추출", monetDesc = "이미지에서 색 하나를 뽑아 Material 3 전체 배색을 생성합니다",
+        monetPickImage = "이미지 선택", monetPresets = "프리셋", monetStyle = "배색 스타일", monetContrast = "대비",
+        monetContrastDefault = "기본", monetContrastHigh = "높음", monetClose = "동적 색상 끄기",
+        monetExtracting = "색상 추출 중…", monetFailed = "색상을 추출하지 못했습니다. 다른 이미지를 사용해 보세요"
     )
     "fr" -> Strings(
         title = "Temp Mail",
@@ -286,7 +293,11 @@ private fun strings(lang: String): Strings = when (lang) {
         cancel = "Annuler", rawData = "Données brutes :",
         authorHomepage = "Page de l'auteur", projectRepo = "Dépôt du projet",
         themeStyle = "Thème", themeDefault = "Material3", themeHyperOS = "Miuix",
-        barStyle = "Barre inférieure", barStyleFloat = "Flottant", barStyleGlass = "Liquid Glass", glassHint = "Appuyez longuement sur la barre et faites glisser pour changer d'onglet"
+        barStyle = "Barre inférieure", barStyleFloat = "Flottant", barStyleGlass = "Liquid Glass", glassHint = "Appuyez longuement sur la barre et faites glisser pour changer d'onglet",
+        monet = "Couleurs Monet", monetDesc = "Extrayez une couleur d'une image pour générer toute la palette Material 3",
+        monetPickImage = "Choisir une image", monetPresets = "Préréglages", monetStyle = "Style de couleur", monetContrast = "Contraste",
+        monetContrastDefault = "Par défaut", monetContrastHigh = "Élevé", monetClose = "Désactiver les couleurs dynamiques",
+        monetExtracting = "Extraction de la couleur…", monetFailed = "Impossible d'extraire une couleur, essayez une autre image"
     )
     "de" -> Strings(
         title = "Temp Mail",
@@ -313,7 +324,11 @@ private fun strings(lang: String): Strings = when (lang) {
         cancel = "Abbrechen", rawData = "Rohdaten:",
         authorHomepage = "Autorenseite", projectRepo = "Projekt-Repository",
         themeStyle = "Design", themeDefault = "Material3", themeHyperOS = "Miuix",
-        barStyle = "Navigationsleiste", barStyleFloat = "Schwebend", barStyleGlass = "Liquid Glass", glassHint = "Leiste lange drücken und ziehen, um Tabs zu wechseln"
+        barStyle = "Navigationsleiste", barStyleFloat = "Schwebend", barStyleGlass = "Liquid Glass", glassHint = "Leiste lange drücken und ziehen, um Tabs zu wechseln",
+        monet = "Monet-Farben", monetDesc = "Eine Farbe aus einem Bild ziehen und daraus ein komplettes Material-3-Farbschema erzeugen",
+        monetPickImage = "Bild auswählen", monetPresets = "Voreinstellungen", monetStyle = "Farbstil", monetContrast = "Kontrast",
+        monetContrastDefault = "Standard", monetContrastHigh = "Hoch", monetClose = "Dynamische Farben ausschalten",
+        monetExtracting = "Farbe wird extrahiert…", monetFailed = "Farbe konnte nicht extrahiert werden, bitte anderes Bild wählen"
     )
     "es" -> Strings(
         title = "Correo Temporal",
@@ -340,7 +355,11 @@ private fun strings(lang: String): Strings = when (lang) {
         cancel = "Cancelar", rawData = "Datos sin procesar:",
         authorHomepage = "Página del autor", projectRepo = "Repositorio del proyecto",
         themeStyle = "Tema", themeDefault = "Material3", themeHyperOS = "Miuix",
-        barStyle = "Barra inferior", barStyleFloat = "Flotante", barStyleGlass = "Liquid Glass", glassHint = "Mantén pulsada la barra y arrastra para cambiar de pestaña"
+        barStyle = "Barra inferior", barStyleFloat = "Flotante", barStyleGlass = "Liquid Glass", glassHint = "Mantén pulsada la barra y arrastra para cambiar de pestaña",
+        monet = "Colores de Monet", monetDesc = "Extrae un color de una imagen y genera toda la paleta Material 3",
+        monetPickImage = "Elegir imagen", monetPresets = "Ajustes preestablecidos", monetStyle = "Estilo de color", monetContrast = "Contraste",
+        monetContrastDefault = "Predeterminado", monetContrastHigh = "Alto", monetClose = "Desactivar colores dinámicos",
+        monetExtracting = "Extrayendo el color…", monetFailed = "No se pudo extraer el color, prueba con otra imagen"
     )
     "pt" -> Strings(
         title = "Email Temporário",
@@ -367,7 +386,11 @@ private fun strings(lang: String): Strings = when (lang) {
         cancel = "Cancelar", rawData = "Dados brutos:",
         authorHomepage = "Página do autor", projectRepo = "Repositório do projeto",
         themeStyle = "Tema", themeDefault = "Material3", themeHyperOS = "Miuix",
-        barStyle = "Barra inferior", barStyleFloat = "Flutuante", barStyleGlass = "Liquid Glass", glassHint = "Pressione e arraste a barra para trocar de aba"
+        barStyle = "Barra inferior", barStyleFloat = "Flutuante", barStyleGlass = "Liquid Glass", glassHint = "Pressione e arraste a barra para trocar de aba",
+        monet = "Cores de Monet", monetDesc = "Extraia uma cor de uma imagem e gere toda a paleta Material 3",
+        monetPickImage = "Escolher imagem", monetPresets = "Predefinições", monetStyle = "Estilo de cor", monetContrast = "Contraste",
+        monetContrastDefault = "Padrão", monetContrastHigh = "Alto", monetClose = "Desativar cores dinâmicas",
+        monetExtracting = "Extraindo a cor…", monetFailed = "Não foi possível extrair a cor, tente outra imagem"
     )
     "ru" -> Strings(
         title = "Временная почта",
@@ -394,7 +417,11 @@ private fun strings(lang: String): Strings = when (lang) {
         cancel = "Отмена", rawData = "Исходные данные:",
         authorHomepage = "Страница автора", projectRepo = "Репозиторий проекта",
         themeStyle = "Тема", themeDefault = "Material3", themeHyperOS = "Miuix",
-        barStyle = "Нижняя панель", barStyleFloat = "Плавающая", barStyleGlass = "Liquid Glass", glassHint = "Зажмите панель и потяните, чтобы переключить вкладку"
+        barStyle = "Нижняя панель", barStyleFloat = "Плавающая", barStyleGlass = "Liquid Glass", glassHint = "Зажмите панель и потяните, чтобы переключить вкладку",
+        monet = "Цвета Моне", monetDesc = "Извлеките цвет из изображения и получите полную палитру Material 3",
+        monetPickImage = "Выбрать изображение", monetPresets = "Пресеты", monetStyle = "Стиль цвета", monetContrast = "Контраст",
+        monetContrastDefault = "Обычный", monetContrastHigh = "Высокий", monetClose = "Отключить динамические цвета",
+        monetExtracting = "Извлечение цвета…", monetFailed = "Не удалось извлечь цвет, попробуйте другое изображение"
     )
     "it" -> Strings(
         title = "Email Temporanea",
@@ -421,7 +448,11 @@ private fun strings(lang: String): Strings = when (lang) {
         cancel = "Annulla", rawData = "Dati grezzi:",
         authorHomepage = "Pagina dell'autore", projectRepo = "Repository del progetto",
         themeStyle = "Tema", themeDefault = "Material3", themeHyperOS = "Miuix",
-        barStyle = "Barra inferiore", barStyleFloat = "Fluttuante", barStyleGlass = "Liquid Glass", glassHint = "Tieni premuta la barra e trascina per cambiare scheda"
+        barStyle = "Barra inferiore", barStyleFloat = "Fluttuante", barStyleGlass = "Liquid Glass", glassHint = "Tieni premuta la barra e trascina per cambiare scheda",
+        monet = "Colori di Monet", monetDesc = "Estrai un colore da un'immagine e genera l'intera palette Material 3",
+        monetPickImage = "Scegli immagine", monetPresets = "Preset", monetStyle = "Stile colore", monetContrast = "Contrasto",
+        monetContrastDefault = "Predefinito", monetContrastHigh = "Alto", monetClose = "Disattiva colori dinamici",
+        monetExtracting = "Estrazione del colore…", monetFailed = "Impossibile estrarre il colore, prova un'altra immagine"
     )
     "ar" -> Strings(
         title = "بريد مؤقت",
@@ -448,7 +479,11 @@ private fun strings(lang: String): Strings = when (lang) {
         cancel = "إلغاء", rawData = "البيانات الخام:",
         authorHomepage = "صفحة المؤلف", projectRepo = "مستودع المشروع",
         themeStyle = "السمة", themeDefault = "Material3", themeHyperOS = "Miuix",
-        barStyle = "الشريط السفلي", barStyleFloat = "عائم", barStyleGlass = "Liquid Glass", glassHint = "اضغط مطولًا على الشريط واسحب لتبديل التبويب"
+        barStyle = "الشريط السفلي", barStyleFloat = "عائم", barStyleGlass = "Liquid Glass", glassHint = "اضغط مطولًا على الشريط واسحب لتبديل التبويب",
+        monet = "ألوان مونيه", monetDesc = "استخرج لونًا من صورة وأنشئ لوحة Material 3 كاملة",
+        monetPickImage = "اختيار صورة", monetPresets = "إعدادات جاهزة", monetStyle = "نمط الألوان", monetContrast = "التباين",
+        monetContrastDefault = "افتراضي", monetContrastHigh = "عالٍ", monetClose = "إيقاف الألوان الديناميكية",
+        monetExtracting = "جارٍ استخراج اللون…", monetFailed = "تعذّر استخراج اللون، جرّب صورة أخرى"
     )
     "hi" -> Strings(
         title = "अस्थायी मेल",
@@ -475,7 +510,11 @@ private fun strings(lang: String): Strings = when (lang) {
         cancel = "रद्द करें", rawData = "कच्चा डेटा:",
         authorHomepage = "लेखक का पेज", projectRepo = "प्रोजेक्ट रिपॉज़िटरी",
         themeStyle = "थीम", themeDefault = "Material3", themeHyperOS = "Miuix",
-        barStyle = "निचला बार", barStyleFloat = "फ़्लोटिंग", barStyleGlass = "Liquid Glass", glassHint = "बार को देर तक दबाकर खींचें और टैब बदलें"
+        barStyle = "निचला बार", barStyleFloat = "फ़्लोटिंग", barStyleGlass = "Liquid Glass", glassHint = "बार को देर तक दबाकर खींचें और टैब बदलें",
+        monet = "मोने रंग", monetDesc = "किसी छवि से एक रंग निकालें और पूरी Material 3 रंग-योजना बनाएँ",
+        monetPickImage = "छवि चुनें", monetPresets = "प्रीसेट", monetStyle = "रंग शैली", monetContrast = "कंट्रास्ट",
+        monetContrastDefault = "डिफ़ॉल्ट", monetContrastHigh = "उच्च", monetClose = "डायनामिक रंग बंद करें",
+        monetExtracting = "रंग निकाला जा रहा है…", monetFailed = "रंग नहीं निकाला जा सका, कोई दूसरी छवि आज़माएँ"
     )
     "vi" -> Strings(
         title = "Mail Tạm Thời",
@@ -502,7 +541,11 @@ private fun strings(lang: String): Strings = when (lang) {
         cancel = "Hủy", rawData = "Dữ liệu thô:",
         authorHomepage = "Trang tác giả", projectRepo = "Kho dự án",
         themeStyle = "Chủ đề", themeDefault = "Material3", themeHyperOS = "Miuix",
-        barStyle = "Thanh dưới", barStyleFloat = "Nổi", barStyleGlass = "Liquid Glass", glassHint = "Nhấn giữ thanh và kéo để chuyển tab"
+        barStyle = "Thanh dưới", barStyleFloat = "Nổi", barStyleGlass = "Liquid Glass", glassHint = "Nhấn giữ thanh và kéo để chuyển tab",
+        monet = "Màu Monet", monetDesc = "Lấy một màu từ ảnh để tạo toàn bộ bảng màu Material 3",
+        monetPickImage = "Chọn ảnh", monetPresets = "Cài sẵn", monetStyle = "Kiểu màu", monetContrast = "Độ tương phản",
+        monetContrastDefault = "Mặc định", monetContrastHigh = "Cao", monetClose = "Tắt màu động",
+        monetExtracting = "Đang trích xuất màu…", monetFailed = "Không trích xuất được màu, hãy thử ảnh khác"
     )
     "th" -> Strings(
         title = "อีเมลชั่วคราว",
@@ -529,7 +572,11 @@ private fun strings(lang: String): Strings = when (lang) {
         cancel = "ยกเลิก", rawData = "ข้อมูลดิบ:",
         authorHomepage = "หน้าผู้เขียน", projectRepo = "ที่เก็บโปรเจ็กต์",
         themeStyle = "ธีม", themeDefault = "Material3", themeHyperOS = "Miuix",
-        barStyle = "แถบล่าง", barStyleFloat = "ลอย", barStyleGlass = "Liquid Glass", glassHint = "กดแถบค้างแล้วลากเพื่อสลับแท็บ"
+        barStyle = "แถบล่าง", barStyleFloat = "ลอย", barStyleGlass = "Liquid Glass", glassHint = "กดแถบค้างแล้วลากเพื่อสลับแท็บ",
+        monet = "สีแบบโมเนต์", monetDesc = "ดึงสีหนึ่งจากรูปภาพเพื่อสร้างชุดสี Material 3 ทั้งหมด",
+        monetPickImage = "เลือกรูปภาพ", monetPresets = "ค่าที่ตั้งไว้", monetStyle = "สไตล์สี", monetContrast = "คอนทราสต์",
+        monetContrastDefault = "ค่าเริ่มต้น", monetContrastHigh = "สูง", monetClose = "ปิดสีไดนามิก",
+        monetExtracting = "กำลังดึงสี…", monetFailed = "ดึงสีไม่สำเร็จ ลองใช้รูปอื่น"
     )
     "id" -> Strings(
         title = "Email Sementara",
@@ -556,7 +603,11 @@ private fun strings(lang: String): Strings = when (lang) {
         cancel = "Batal", rawData = "Data mentah:",
         authorHomepage = "Halaman Penulis", projectRepo = "Repositori Proyek",
         themeStyle = "Tema", themeDefault = "Material3", themeHyperOS = "Miuix",
-        barStyle = "Bilah bawah", barStyleFloat = "Mengambang", barStyleGlass = "Liquid Glass", glassHint = "Tekan lama bilah lalu geser untuk berpindah tab"
+        barStyle = "Bilah bawah", barStyleFloat = "Mengambang", barStyleGlass = "Liquid Glass", glassHint = "Tekan lama bilah lalu geser untuk berpindah tab",
+        monet = "Warna Monet", monetDesc = "Ambil satu warna dari gambar untuk membuat skema Material 3 lengkap",
+        monetPickImage = "Pilih gambar", monetPresets = "Preset", monetStyle = "Gaya warna", monetContrast = "Kontras",
+        monetContrastDefault = "Bawaan", monetContrastHigh = "Tinggi", monetClose = "Matikan warna dinamis",
+        monetExtracting = "Mengekstrak warna…", monetFailed = "Warna gagal diekstrak, coba gambar lain"
     )
     else -> Strings(
         title = "临时邮箱",
@@ -1837,6 +1888,9 @@ private fun SettingsTab(
                     },
                     label = "settingsPage"
                 ) { currentPage ->
+                    // AnimatedContent 的内容作用域不会垂直堆叠同级元素：包一层 Column，
+                    // 否则页面内"返回按钮 + 标题 + 卡片"会互相覆盖（标题与返回按钮被卡片盖住）
+                    Column {
                     when (currentPage) {
                         SettingsPage.Main -> {
                             Text(s.settings, style = MaterialTheme.typography.headlineSmall)
@@ -1992,16 +2046,14 @@ private fun SettingsTab(
                             }
                         }
 
-                        SettingsPage.Monet -> Column {
-                            MonetPage(
-                                state = state,
-                                s = s,
-                                snackbar = snackbar,
-                                scope = scope,
-                                onState = onState,
-                                onBack = { page = SettingsPage.Main }
-                            )
-                        }
+                        SettingsPage.Monet -> MonetPage(
+                            state = state,
+                            s = s,
+                            snackbar = snackbar,
+                            scope = scope,
+                            onState = onState,
+                            onBack = { page = SettingsPage.Main }
+                        )
 
                         SettingsPage.About -> {
                             ThemedIconButton(onClick = { page = SettingsPage.Main }) {
@@ -2060,6 +2112,7 @@ private fun SettingsTab(
                         }
                     }
                 }
+                    }
                     }
                 }
             }
