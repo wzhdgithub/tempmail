@@ -26,18 +26,18 @@ import com.materialkolor.scheme.SchemeVibrant
 const val NoDynamicSeed = -1
 
 /** 动态配色风格：对应 MCU 的 Scheme 变体，key 用于持久化（未知值回退默认）。 */
-enum class DynamicStyle(val key: String) {
+enum class DynamicStyle(val key: String, val label: String) {
     /** 默认观感最接近 Material You 系统配色 */
-    TonalSpot("tonal_spot"),
+    TonalSpot("tonal_spot", "Tonal Spot"),
 
     /** 更鲜艳，主色饱和度更高 */
-    Vibrant("vibrant"),
+    Vibrant("vibrant", "Vibrant"),
 
     /** 更活泼，色相分布更分散（适合"作品取色"这类偏艺术化的场景） */
-    Expressive("expressive"),
+    Expressive("expressive", "Expressive"),
 
     /** 忠实于原图色彩（主色就是 seed 本身） */
-    Content("content");
+    Content("content", "Content");
 
     companion object {
         fun fromKey(key: String?): DynamicStyle = entries.find { it.key == key } ?: TonalSpot

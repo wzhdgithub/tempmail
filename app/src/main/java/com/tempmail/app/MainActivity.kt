@@ -21,6 +21,7 @@ import androidx.activity.ComponentActivity
 import androidx.core.content.FileProvider
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -48,6 +49,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -90,7 +92,9 @@ import com.tempmail.app.ui.glass.isGlassBlurSupported
 import com.tempmail.app.ui.theme.TempMailTheme
 import com.tempmail.app.ui.theme.ThemeStyle
 import com.tempmail.app.ui.theme.dynamic.DynamicStyle
+import com.tempmail.app.ui.theme.dynamic.MonetPresets
 import com.tempmail.app.ui.theme.dynamic.NoDynamicSeed
+import com.tempmail.app.ui.theme.dynamic.extractSeedFromUri
 import com.tempmail.app.ui.theme.ThemedButton
 import com.tempmail.app.ui.theme.ThemedCard
 import com.tempmail.app.ui.theme.ThemedDivider
@@ -159,7 +163,20 @@ private data class Strings(
     val authorHomepage: String, val projectRepo: String,
     val themeStyle: String, val themeDefault: String, val themeHyperOS: String,
     val barStyle: String, val barStyleFloat: String, val barStyleGlass: String,
-    val glassHint: String
+    val glassHint: String,
+    // 动态配色（莫奈取色）。以下默认值即英文文案；中文在 zh 分支单独给出，
+    // 其余 13 种语言在 P4 本地化前先沿用英文默认值。
+    val monet: String = "Dynamic Colors",
+    val monetDesc: String = "Pick an image and its color becomes a full Material 3 theme",
+    val monetPickImage: String = "Choose image",
+    val monetPresets: String = "Presets",
+    val monetStyle: String = "Color style",
+    val monetContrast: String = "Contrast",
+    val monetContrastDefault: String = "Default",
+    val monetContrastHigh: String = "High",
+    val monetClose: String = "Turn off",
+    val monetExtracting: String = "Extracting color…",
+    val monetFailed: String = "Couldn't extract a color, try another image"
 )
 
 private fun strings(lang: String): Strings = when (lang) {
@@ -566,7 +583,11 @@ private fun strings(lang: String): Strings = when (lang) {
         cancel = "取消", rawData = "原始数据:",
         authorHomepage = "作者主页", projectRepo = "项目仓库",
         themeStyle = "主题风格", themeDefault = "Material3", themeHyperOS = "Miuix",
-        barStyle = "底栏风格", barStyleFloat = "悬浮", barStyleGlass = "Liquid Glass", glassHint = "长按底栏可左右拖动切换标签"
+        barStyle = "底栏风格", barStyleFloat = "悬浮", barStyleGlass = "Liquid Glass", glassHint = "长按底栏可左右拖动切换标签",
+        monet = "莫奈取色", monetDesc = "从图片里取一个颜色，生成整套 Material 3 配色",
+        monetPickImage = "选择图片", monetPresets = "预设", monetStyle = "配色风格", monetContrast = "对比度",
+        monetContrastDefault = "默认", monetContrastHigh = "高", monetClose = "关闭动态配色",
+        monetExtracting = "正在提取主色…", monetFailed = "取色失败，请换一张图片"
     )
 }
 
@@ -1783,7 +1804,7 @@ private fun HistoryTab(
     }
 }
 
-private enum class SettingsPage { Main, Language, DarkMode, Theme, BarStyle, About, Author }
+private enum class SettingsPage { Main, Language, DarkMode, Theme, BarStyle, Monet, About, Author }
 
 @Composable
 private fun SettingsTab(
@@ -1847,6 +1868,17 @@ private fun SettingsTab(
                                             label = s.barStyle,
                                             value = if (state.barStyle == BarStyle.LiquidGlass) s.barStyleGlass else s.barStyleFloat,
                                             onClick = { page = SettingsPage.BarStyle }
+                                        )
+                                    }
+                                    // 动态配色只在 Material3 主题下生效（Miuix 配色固定），
+                                    // 与上面"底栏风格仅在 Miuix 下提供"正好互补
+                                    if (state.themeStyle == ThemeStyle.Material3) {
+                                        ThemedDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                                        SettingsItem(
+                                            label = s.monet,
+                                            value = if (state.dynamicSeed == NoDynamicSeed) "OFF"
+                                            else "#%06X".format(state.dynamicSeed and 0xFFFFFF),
+                                            onClick = { page = SettingsPage.Monet }
                                         )
                                     }
                             ThemedDivider(modifier = Modifier.padding(horizontal = 16.dp))
@@ -1960,6 +1992,17 @@ private fun SettingsTab(
                             }
                         }
 
+                        SettingsPage.Monet -> Column {
+                            MonetPage(
+                                state = state,
+                                s = s,
+                                snackbar = snackbar,
+                                scope = scope,
+                                onState = onState,
+                                onBack = { page = SettingsPage.Main }
+                            )
+                        }
+
                         SettingsPage.About -> {
                             ThemedIconButton(onClick = { page = SettingsPage.Main }) {
                                 Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = s.back)
@@ -2031,6 +2074,144 @@ private fun SettingsTab(
                     .padding(bottom = 8.dp + bottomOverlap))
         }
     }
+}
+
+/**
+ * 莫奈取色子页：选择图片取色 / 预设色 / 配色风格 / 对比度 / 关闭。
+ * 仅在 Material3 主题下可达（Miuix 主题不提供入口，配色也不受影响）。
+ */
+@Composable
+private fun MonetPage(
+    state: AppState,
+    s: Strings,
+    snackbar: SnackbarHostState,
+    scope: CoroutineScope,
+    onState: (AppState) -> Unit,
+    onBack: () -> Unit
+) {
+    val ctx = LocalContext.current
+    var extracting by remember { mutableStateOf(false) }
+
+    // 系统相册选择器（Android 13+ 用 Photo Picker，低版本回退文档选择器），无需任何权限
+    val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        scope.launch {
+            extracting = true
+            // 解码与取色都在 SeedExtractor 内部的 Dispatchers.IO 上执行
+            val seed = extractSeedFromUri(ctx, uri)
+            extracting = false
+            if (seed != null) {
+                onState(state.copy(dynamicSeed = seed))
+            } else {
+                snackbar.showSnackbar(s.monetFailed)
+            }
+        }
+    }
+
+    ThemedIconButton(onClick = onBack) {
+        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = s.back)
+    }
+    Spacer(Modifier.height(8.dp))
+    Text(s.monet, style = MaterialTheme.typography.headlineSmall)
+    Spacer(Modifier.height(6.dp))
+    Text(
+        s.monetDesc,
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant
+    )
+    Spacer(Modifier.height(20.dp))
+
+    val scheme = MaterialTheme.colorScheme
+    ThemedCard(Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.large) {
+        Column(Modifier.padding(20.dp)) {
+            Text(s.monetPresets, style = MaterialTheme.typography.labelLarge)
+            Spacer(Modifier.height(10.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                MonetPresets.forEach { preset ->
+                    ColorDot(
+                        color = Color(preset),
+                        selected = state.dynamicSeed == preset,
+                        onClick = { onState(state.copy(dynamicSeed = preset)) }
+                    )
+                }
+            }
+            Spacer(Modifier.height(18.dp))
+            // 当前生效的配色速览（直接读当前 ColorScheme，改 seed 后立即变化）
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                listOf(
+                    scheme.primary, scheme.secondary, scheme.tertiary,
+                    scheme.primaryContainer, scheme.secondaryContainer, scheme.surfaceContainerHighest
+                ).forEach { ColorDot(color = it, selected = false) }
+            }
+        }
+    }
+
+    Spacer(Modifier.height(16.dp))
+    ThemedButton(
+        onClick = {
+            picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+        },
+        modifier = Modifier.fillMaxWidth(),
+        enabled = !extracting
+    ) {
+        Text(if (extracting) s.monetExtracting else s.monetPickImage)
+    }
+
+    Spacer(Modifier.height(20.dp))
+    ThemedCard(Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.large) {
+        Column {
+            DynamicStyle.entries.forEachIndexed { index, style ->
+                if (index > 0) ThemedDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                // 风格名沿用 MCU 官方叫法（与 Material3 / Miuix 一样视为品牌名，不翻译）
+                LanguageOption(style.label, state.dynamicStyle == style) {
+                    onState(state.copy(dynamicStyle = style))
+                }
+            }
+        }
+    }
+
+    Spacer(Modifier.height(16.dp))
+    ThemedCard(Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.large) {
+        Column {
+            LanguageOption(s.monetContrastDefault, state.dynamicContrast == 0f) {
+                onState(state.copy(dynamicContrast = 0f))
+            }
+            ThemedDivider(modifier = Modifier.padding(horizontal = 16.dp))
+            LanguageOption(s.monetContrastHigh, state.dynamicContrast == 0.5f) {
+                onState(state.copy(dynamicContrast = 0.5f))
+            }
+        }
+    }
+
+    Spacer(Modifier.height(16.dp))
+    ThemedCard(Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.large) {
+        Column {
+            SettingsItem(
+                label = s.monetClose,
+                value = if (state.dynamicSeed == NoDynamicSeed) "OFF" else null,
+                onClick = { onState(state.copy(dynamicSeed = NoDynamicSeed)) }
+            )
+        }
+    }
+    Spacer(Modifier.height(24.dp))
+}
+
+/** 色点：预设色可点击；用于展示当前配色的那一组不可点击。 */
+@Composable
+private fun ColorDot(color: Color, selected: Boolean, onClick: (() -> Unit)? = null) {
+    Box(
+        Modifier
+            .size(40.dp)
+            .clip(CircleShape)
+            .background(color)
+            .border(
+                width = if (selected) 3.dp else 1.dp,
+                color = if (selected) MaterialTheme.colorScheme.primary
+                else MaterialTheme.colorScheme.outlineVariant,
+                shape = CircleShape
+            )
+            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
+    )
 }
 
 @Composable
