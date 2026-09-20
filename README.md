@@ -2,6 +2,9 @@
 
 > 一个 Android 临时邮箱应用（Jetpack Compose）：一键生成临时邮箱、收信、复制验证码，
 > 15 种语言、深浅色与动态配色，支持应用内自动更新。
+>
+> UI 实现（Material3 / HyperOS 双主题、莫奈取色、液态玻璃底栏）已单独开源：
+> [TempMail-UI](https://github.com/wzhdgithub/TempMail-UI)。
 
 [![License](https://img.shields.io/badge/License-GPL--3.0--or--later-blue.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/Android-API%2024%2B-3DDC84.svg)](https://developer.android.com)
@@ -87,4 +90,5 @@ Copyright (C) 2026 wzhdgithub。
 
 - GitHub 仓库：https://github.com/wzhdgithub/tempmail
 - Releases：https://github.com/wzhdgithub/tempmail/releases
+- UI 实现（单独仓库）：https://github.com/wzhdgithub/TempMail-UI
 - 官网：https://wzhtmail.pwapi.cn/
