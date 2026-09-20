@@ -95,6 +95,16 @@ dependencies {
 
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
 
+    // 动态配色（Monet 取色 → Material 3 配色）：
+    //  - palette：官方取色库（从图片提取主色，得到 seed）
+    //  - material-color-utilities：Google MCU 的 Kotlin 移植，seed → 完整 M3 ColorScheme
+    //    版本刻意与 miuix-ui 传递依赖的 4.1.1 对齐：该库是 KMP 多模块发布，
+    //    若声明 -android 5.0.1 会把 Miuix 依赖的那份一起升级（Gradle 按 -android 统一），
+    //    从而让 Miuix 运行在它构建时未针对的版本上；同版本则只有一份、零风险。
+    // 两者都不依赖 Compose，因此不影响 material3 1.4.0 的版本解析。
+    implementation("androidx.palette:palette:1.0.0")
+    implementation("com.materialkolor:material-color-utilities:4.1.1")
+
     // Miuix（KernelSU 同款 UI 框架）：miuix-ui 提供组件，miuix-blur 提供
     // RuntimeShader 液态玻璃模糊（实际模糊效果仅 API 33+，低版本自动降级）
     val miuixVersion = "0.9.3"

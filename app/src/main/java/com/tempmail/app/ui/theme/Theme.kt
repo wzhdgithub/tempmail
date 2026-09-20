@@ -14,6 +14,8 @@ import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.tempmail.app.ui.theme.dynamic.DynamicStyle
+import com.tempmail.app.ui.theme.dynamic.rememberDynamicColorSchemes
 
 // 原有 Material3 配色（保持不变）
 private val LightColorScheme = lightColorScheme(
@@ -140,11 +142,22 @@ fun themedSwitchColors(): SwitchColors =
 fun TempMailTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     themeStyle: ThemeStyle = ThemeStyle.Material3,
+    dynamicSeed: Int? = null,
+    dynamicStyle: DynamicStyle = DynamicStyle.TonalSpot,
+    dynamicContrast: Float = 0f,
     content: @Composable () -> Unit
 ) {
     val colorScheme = when (themeStyle) {
+        // HyperOS(Miuix) 分支不读取任何动态配色参数：配色与迁移前完全一致
         ThemeStyle.HyperOS -> if (darkTheme) HyperDarkColorScheme else HyperLightColorScheme
-        ThemeStyle.Material3 -> if (darkTheme) DarkColorScheme else LightColorScheme
+        ThemeStyle.Material3 -> if (dynamicSeed == null) {
+            // 未启用动态配色：与定制前逐像素一致
+            if (darkTheme) DarkColorScheme else LightColorScheme
+        } else {
+            // 启用动态配色：由 seed 推导出完整 token 的 Material 3 双套配色
+            val dynamic = rememberDynamicColorSchemes(dynamicSeed, dynamicStyle, dynamicContrast)
+            if (darkTheme) dynamic.dark else dynamic.light
+        }
     }
     val shapes = when (themeStyle) {
         ThemeStyle.HyperOS -> HyperShapes
