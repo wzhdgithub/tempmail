@@ -22,6 +22,9 @@ import com.materialkolor.scheme.SchemeVibrant
 // 只服务于 Material3 主题分支：TempMailTheme 仅在 ThemeStyle.Material3 下使用本文件的结果，
 // HyperOS(Miuix) 分支与自定义底栏完全不读取这里的任何内容。
 
+/** 动态配色未启用时的 seed 值（持久化用 Int，避免可空类型在 prefs/JSON 里的歧义）。 */
+const val NoDynamicSeed = -1
+
 /** 动态配色风格：对应 MCU 的 Scheme 变体，key 用于持久化（未知值回退默认）。 */
 enum class DynamicStyle(val key: String) {
     /** 默认观感最接近 Material You 系统配色 */

@@ -89,6 +89,8 @@ import com.tempmail.app.ui.glass.GlassShell
 import com.tempmail.app.ui.glass.isGlassBlurSupported
 import com.tempmail.app.ui.theme.TempMailTheme
 import com.tempmail.app.ui.theme.ThemeStyle
+import com.tempmail.app.ui.theme.dynamic.DynamicStyle
+import com.tempmail.app.ui.theme.dynamic.NoDynamicSeed
 import com.tempmail.app.ui.theme.ThemedButton
 import com.tempmail.app.ui.theme.ThemedCard
 import com.tempmail.app.ui.theme.ThemedDivider
@@ -611,7 +613,11 @@ data class AppState(
     val language: String = "zh",
     val autoCheckUpdate: Boolean = true,
     val themeStyle: ThemeStyle = ThemeStyle.Material3,
-    val barStyle: BarStyle = BarStyle.Float
+    val barStyle: BarStyle = BarStyle.Float,
+    // 动态配色（默认关闭）：seed = NoDynamicSeed 时 Material3 配色与定制前完全一致
+    val dynamicSeed: Int = NoDynamicSeed,
+    val dynamicStyle: DynamicStyle = DynamicStyle.TonalSpot,
+    val dynamicContrast: Float = 0f
 )
 
 private val disclaimerText = """
@@ -668,7 +674,10 @@ class MainActivity : ComponentActivity() {
                     isDarkMode = prefs.getBoolean("isDarkMode", false),
                     autoCheckUpdate = prefs.getBoolean("autoCheckUpdate", true),
                     themeStyle = ThemeStyle.fromKey(prefs.getString("themeStyle", ThemeStyle.Material3.key)),
-                    barStyle = BarStyle.fromKey(prefs.getString("barStyle", BarStyle.Float.key))
+                    barStyle = BarStyle.fromKey(prefs.getString("barStyle", BarStyle.Float.key)),
+                    dynamicSeed = prefs.getInt("dynamicSeed", NoDynamicSeed),
+                    dynamicStyle = DynamicStyle.fromKey(prefs.getString("dynamicStyle", DynamicStyle.TonalSpot.key)),
+                    dynamicContrast = prefs.getFloat("dynamicContrast", 0f)
                 ))
             }
             val snackbar = remember { SnackbarHostState() }
@@ -908,7 +917,14 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
-            TempMailTheme(darkTheme = state.isDarkMode, themeStyle = state.themeStyle) {
+            TempMailTheme(
+                darkTheme = state.isDarkMode,
+                themeStyle = state.themeStyle,
+                // 动态配色：仅在 Material3 主题下生效；未启用时传 null，配色与定制前完全一致
+                dynamicSeed = state.dynamicSeed.takeIf { it != NoDynamicSeed },
+                dynamicStyle = state.dynamicStyle,
+                dynamicContrast = state.dynamicContrast
+            ) {
                 // 两套主题共用同一份页面内容，仅外层布局与底栏形态不同
                 val tabLabel: (Tab) -> String = { tab ->
                     when (tab) {
@@ -1028,6 +1044,15 @@ class MainActivity : ComponentActivity() {
                                 }
                                 if (newState.barStyle != state.barStyle) {
                                     prefs.edit().putString("barStyle", newState.barStyle.key).apply()
+                                }
+                                if (newState.dynamicSeed != state.dynamicSeed) {
+                                    prefs.edit().putInt("dynamicSeed", newState.dynamicSeed).apply()
+                                }
+                                if (newState.dynamicStyle != state.dynamicStyle) {
+                                    prefs.edit().putString("dynamicStyle", newState.dynamicStyle.key).apply()
+                                }
+                                if (newState.dynamicContrast != state.dynamicContrast) {
+                                    prefs.edit().putFloat("dynamicContrast", newState.dynamicContrast).apply()
                                 }
                                 state = newState
                             }
@@ -2355,6 +2380,9 @@ private fun appStateToJson(state: AppState): String {
     j.put("autoCheckUpdate", state.autoCheckUpdate)
     j.put("themeStyle", state.themeStyle.key)
     j.put("barStyle", state.barStyle.key)
+    j.put("dynamicSeed", state.dynamicSeed)
+    j.put("dynamicStyle", state.dynamicStyle.key)
+    j.put("dynamicContrast", state.dynamicContrast.toDouble())
     j.put("tab", state.currentTab.ordinal)
     // items 限制条数、正文截断、且不保存 htmlBody（完整 HTML 动辄数十 KB），
     // 防止写入 Bundle 越过 Binder 事务上限导致 TransactionTooLargeException
@@ -2425,7 +2453,10 @@ private fun appStateFromJson(json: String): AppState? {
             language = j.optString("language", "zh"),
             autoCheckUpdate = j.optBoolean("autoCheckUpdate", true),
             themeStyle = ThemeStyle.fromKey(j.optString("themeStyle", ThemeStyle.Material3.key)),
-            barStyle = BarStyle.fromKey(j.optString("barStyle", BarStyle.Float.key))
+            barStyle = BarStyle.fromKey(j.optString("barStyle", BarStyle.Float.key)),
+            dynamicSeed = j.optInt("dynamicSeed", NoDynamicSeed),
+            dynamicStyle = DynamicStyle.fromKey(j.optString("dynamicStyle", DynamicStyle.TonalSpot.key)),
+            dynamicContrast = j.optDouble("dynamicContrast", 0.0).toFloat()
         )
     } catch (e: Exception) {
         null
