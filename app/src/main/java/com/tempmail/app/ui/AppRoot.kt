@@ -229,7 +229,6 @@ internal fun TempMailApp(activity: ComponentActivity) {
         var downloadProgress by remember { mutableStateOf(0) }
         var poem by remember { mutableStateOf<PoemLine?>(null) }
 
-        var announcement by remember { mutableStateOf<Announcement?>(null) }
         val client = remember {
             OkHttpClient.Builder()
                 .connectTimeout(15, TimeUnit.SECONDS)
@@ -523,12 +522,6 @@ internal fun TempMailApp(activity: ComponentActivity) {
         }
 
 
-        // 远程公告: 启动时静默拉取; 版本大于本地已读版本才展示, 失败静默不影响主流程
-        LaunchedEffect(Unit) {
-            fetchAnnouncement(client)?.let { a ->
-                if (a.version > prefs.getInt("announcementReadVersion", 0)) announcement = a
-            }
-        }
         // 清理上次更新遗留的安装包
         LaunchedEffect(Unit) {
             withContext(Dispatchers.IO) {
@@ -794,42 +787,4 @@ internal fun TempMailApp(activity: ComponentActivity) {
             }
         }
 
-            // 远程公告弹窗: 更新/下载对话框优先, 免责页期间不展示; 任意关闭路径都标记已读
-            announcement?.takeIf { !showDisclaimer && !showUpdateDialog && !showDownloadProgress }
-                ?.let { a ->
-                    fun dismissAnnouncement() {
-                        prefs.edit().putInt("announcementReadVersion", a.version).apply()
-                        announcement = null
-                    }
-                    AlertDialog(
-                        onDismissRequest = { dismissAnnouncement() },
-                        title = { Text(s.announcement) },
-                        text = {
-                            Column(Modifier.verticalScroll(rememberScrollState())) {
-                                if (a.publishTime.isNotBlank()) {
-                                    Text(
-                                        a.publishTime,
-                                        style = MaterialTheme.typography.labelMedium,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                    Spacer(Modifier.height(8.dp))
-                                }
-                                Text(a.content, style = MaterialTheme.typography.bodyMedium)
-                            }
-                        },
-                        confirmButton = {
-                            if (a.url.isNotBlank()) {
-                                ThemedTextButton(onClick = {
-                                    dismissAnnouncement()
-                                    try {
-                                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(a.url)))
-                                    } catch (_: Exception) { }
-                                }) { Text(s.announcementView) }
-                            }
-                        },
-                        dismissButton = {
-                            ThemedTextButton(onClick = { dismissAnnouncement() }) { Text(s.gotIt) }
-                        }
-                    )
-                }
 }

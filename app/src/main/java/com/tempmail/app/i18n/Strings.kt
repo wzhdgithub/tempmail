@@ -91,8 +91,9 @@ internal data class Strings(
     val autoRefresh: String = "Auto refresh",
     // 远程公告（GitHub Pages 静态 JSON）：15 种语言均已翻译，默认值作为未知语言的英文兜底
     val announcement: String = "Announcement",
-    val gotIt: String = "Got it",
-    val announcementView: String = "View details"
+    val announcementView: String = "View details",
+    // "不再提醒"：记录当前公告 version 后永久忽略；新公告（version 更大）仍正常展示
+    val announceMute: String = "Don't show again"
 )
 
 internal fun strings(lang: String): Strings = when (lang) {
@@ -167,8 +168,8 @@ internal fun strings(lang: String): Strings = when (lang) {
         expiresInFmt = "%s後に期限切れ",
         autoRefresh = "自動更新",
         announcement = "お知らせ",
-        gotIt = "了解",
-        announcementView = "詳細を見る"
+        announcementView = "詳細を見る",
+        announceMute = "今後表示しない"
     )
     "ko" -> Strings(
         title = "임시 메일",
@@ -214,8 +215,8 @@ internal fun strings(lang: String): Strings = when (lang) {
         expiresInFmt = "%s 후 만료",
         autoRefresh = "자동 새로고침",
         announcement = "공지",
-        gotIt = "확인",
-        announcementView = "자세히 보기"
+        announcementView = "자세히 보기",
+        announceMute = "다시 보지 않기"
     )
     "fr" -> Strings(
         title = "Temp Mail",
@@ -261,8 +262,8 @@ internal fun strings(lang: String): Strings = when (lang) {
         expiresInFmt = "Expire dans %s",
         autoRefresh = "Actualisation auto",
         announcement = "Annonce",
-        gotIt = "Compris",
-        announcementView = "Voir les détails"
+        announcementView = "Voir les détails",
+        announceMute = "Ne plus afficher"
     )
     "de" -> Strings(
         title = "Temp Mail",
@@ -308,8 +309,8 @@ internal fun strings(lang: String): Strings = when (lang) {
         expiresInFmt = "Läuft ab in %s",
         autoRefresh = "Auto-Aktualisierung",
         announcement = "Ankündigung",
-        gotIt = "Verstanden",
-        announcementView = "Details ansehen"
+        announcementView = "Details ansehen",
+        announceMute = "Nicht mehr anzeigen"
     )
     "es" -> Strings(
         title = "Correo Temporal",
@@ -355,8 +356,8 @@ internal fun strings(lang: String): Strings = when (lang) {
         expiresInFmt = "Caduca en %s",
         autoRefresh = "Actualización automática",
         announcement = "Anuncio",
-        gotIt = "Entendido",
-        announcementView = "Ver detalles"
+        announcementView = "Ver detalles",
+        announceMute = "No mostrar más"
     )
     "pt" -> Strings(
         title = "Email Temporário",
@@ -402,8 +403,8 @@ internal fun strings(lang: String): Strings = when (lang) {
         expiresInFmt = "Expira em %s",
         autoRefresh = "Atualização automática",
         announcement = "Anúncio",
-        gotIt = "Entendi",
-        announcementView = "Ver detalhes"
+        announcementView = "Ver detalhes",
+        announceMute = "Não mostrar mais"
     )
     "ru" -> Strings(
         title = "Временная почта",
@@ -449,8 +450,8 @@ internal fun strings(lang: String): Strings = when (lang) {
         expiresInFmt = "Истекает через %s",
         autoRefresh = "Автообновление",
         announcement = "Объявление",
-        gotIt = "Понятно",
-        announcementView = "Подробнее"
+        announcementView = "Подробнее",
+        announceMute = "Больше не показывать"
     )
     "it" -> Strings(
         title = "Email Temporanea",
@@ -496,8 +497,8 @@ internal fun strings(lang: String): Strings = when (lang) {
         expiresInFmt = "Scade tra %s",
         autoRefresh = "Aggiornamento automatico",
         announcement = "Annuncio",
-        gotIt = "Ho capito",
-        announcementView = "Vedi dettagli"
+        announcementView = "Vedi dettagli",
+        announceMute = "Non mostrare più"
     )
     "ar" -> Strings(
         title = "بريد مؤقت",
@@ -543,8 +544,8 @@ internal fun strings(lang: String): Strings = when (lang) {
         expiresInFmt = "ينتهي بعد %s",
         autoRefresh = "تحديث تلقائي",
         announcement = "إعلان",
-        gotIt = "فهمت",
-        announcementView = "عرض التفاصيل"
+        announcementView = "عرض التفاصيل",
+        announceMute = "لا تعرض مجددًا"
     )
     "hi" -> Strings(
         title = "अस्थायी मेल",
@@ -590,8 +591,8 @@ internal fun strings(lang: String): Strings = when (lang) {
         expiresInFmt = "%s में समाप्त",
         autoRefresh = "ऑटो रिफ्रेश",
         announcement = "घोषणा",
-        gotIt = "समझ गया",
-        announcementView = "विवरण देखें"
+        announcementView = "विवरण देखें",
+        announceMute = "दोबारा न दिखाएँ"
     )
     "vi" -> Strings(
         title = "Mail Tạm Thời",
@@ -637,8 +638,8 @@ internal fun strings(lang: String): Strings = when (lang) {
         expiresInFmt = "Hết hạn sau %s",
         autoRefresh = "Tự động làm mới",
         announcement = "Thông báo",
-        gotIt = "Đã hiểu",
-        announcementView = "Xem chi tiết"
+        announcementView = "Xem chi tiết",
+        announceMute = "Không hiện lại"
     )
     "th" -> Strings(
         title = "อีเมลชั่วคราว",
@@ -684,8 +685,8 @@ internal fun strings(lang: String): Strings = when (lang) {
         expiresInFmt = "หมดอายุใน %s",
         autoRefresh = "รีเฟรชอัตโนมัติ",
         announcement = "ประกาศ",
-        gotIt = "เข้าใจแล้ว",
-        announcementView = "ดูรายละเอียด"
+        announcementView = "ดูรายละเอียด",
+        announceMute = "ไม่ต้องแสดงอีก"
     )
     "id" -> Strings(
         title = "Email Sementara",
@@ -731,8 +732,8 @@ internal fun strings(lang: String): Strings = when (lang) {
         expiresInFmt = "Kedaluwarsa dalam %s",
         autoRefresh = "Refresh otomatis",
         announcement = "Pengumuman",
-        gotIt = "Mengerti",
-        announcementView = "Lihat detail"
+        announcementView = "Lihat detail",
+        announceMute = "Jangan tampilkan lagi"
     )
     else -> Strings(
         title = "临时邮箱",
@@ -778,8 +779,8 @@ internal fun strings(lang: String): Strings = when (lang) {
         expiresInFmt = "%s后过期",
         autoRefresh = "自动刷新",
         announcement = "公告",
-        gotIt = "知道了",
-        announcementView = "查看详情"
+        announcementView = "查看详情",
+        announceMute = "不再提醒"
     )
 }
 
