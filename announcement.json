@@ -1,8 +1,8 @@
 {
   "version": 3,
   "enabled": true,
-  "title": "软件公告",
-  "content": "本次更新增加了新的底栏效果。\n更多说明请查看详情。",
+  "title": "公告",
+  "content": "这是一则公告。\nhello。",
   "publishTime": "2026-09-22",
   "url": "https://github.com/wzhdgithub/tempmail"
 }
