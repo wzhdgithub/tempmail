@@ -383,28 +383,17 @@ class MainActivity : ComponentActivity() {
             }
 
             // silent=true 供自动轮询使用：不置 isLoading（避免生成按钮周期性闪禁用）、不弹错误提示
+            // silent=true 供自动轮询使用：不置 isLoading（避免生成按钮周期性闪禁用）、不弹错误提示
             fun doRefresh(e: String, onDone: (count: Int, raw: String) -> Unit, silent: Boolean = false) {
                 if (!silent) state = state.copy(isLoading = true)
                 scope.launch(Dispatchers.IO) {
                     try {
-                        val apiUrl = "https://api.pearapi.ai/api/email/".toHttpUrl().newBuilder()
-                            .addQueryParameter("type", "receive")
-                            .addQueryParameter("email", e)
-                            .build()
-                        val r = Request.Builder()
-                            .url(apiUrl)
-                            .get().build()
-                        val body = client.newCall(r).execute().body?.string() ?: ""
-                        val j = JSONObject(body)
-                        if (j.optString("code") == "200") {
-                            val raw = j.optString("receivedata", "")
-                            val cnt = j.optString("count", "0").toIntOrNull() ?: 0
-                            withContext(Dispatchers.Main) { onDone(cnt, raw) }
-                        } else {
-                            withContext(Dispatchers.Main) {
-                                state = state.copy(isLoading = false)
-                                if (!silent) scope.launch { snackbar.showSnackbar(j.optString("msg", s.queryFailed)) }
-                            }
+                        val (cnt, raw) = MailRepository.fetchInbox(client, e)
+                        withContext(Dispatchers.Main) { onDone(cnt, raw) }
+                    } catch (e: MailApiException) {
+                        withContext(Dispatchers.Main) {
+                            state = state.copy(isLoading = false)
+                            if (!silent) scope.launch { snackbar.showSnackbar(e.userMsg.ifBlank { s.queryFailed }) }
                         }
                     } catch (e: Exception) {
                         withContext(Dispatchers.Main) {
@@ -417,33 +406,23 @@ class MainActivity : ComponentActivity() {
 
             // instanttempemail.com 收件箱查询：GET /api/inbox/{token}
             // 200 → {address, emails:[...], expires}；404 → 邮箱已过期（7 天有效期）
+            // instanttempemail.com 收件箱查询：GET /api/inbox/{token}
+            // 200 → {address, emails:[...], expires}；404 → 邮箱已过期（7 天有效期）
             fun doRefreshIte(token: String, onDone: (count: Int, raw: String) -> Unit, silent: Boolean = false) {
                 if (!silent) state = state.copy(isLoading = true)
                 scope.launch(Dispatchers.IO) {
                     try {
-                        val apiUrl = "https://instanttempemail.com/api/inbox/".toHttpUrl().newBuilder()
-                            .addPathSegment(token)
-                            .build()
-                        val r = Request.Builder()
-                            .url(apiUrl)
-                            .get().build()
-                        val resp = client.newCall(r).execute()
-                        val body = resp.body?.string() ?: ""
-                        if (resp.code == 404) {
-                            withContext(Dispatchers.Main) {
-                                state = state.copy(isLoading = false)
-                                if (!silent) scope.launch { snackbar.showSnackbar(s.mailboxExpired) }
-                            }
-                        } else if (resp.isSuccessful) {
-                            val cnt = try {
-                                JSONObject(body).optJSONArray("emails")?.length() ?: 0
-                            } catch (_: Exception) { 0 }
-                            withContext(Dispatchers.Main) { onDone(cnt, body) }
-                        } else {
-                            withContext(Dispatchers.Main) {
-                                state = state.copy(isLoading = false)
-                                if (!silent) scope.launch { snackbar.showSnackbar(s.queryFailed) }
-                            }
+                        val (cnt, body) = MailRepository.fetchIteInbox(client, token)
+                        withContext(Dispatchers.Main) { onDone(cnt, body) }
+                    } catch (e: MailboxExpiredException) {
+                        withContext(Dispatchers.Main) {
+                            state = state.copy(isLoading = false)
+                            if (!silent) scope.launch { snackbar.showSnackbar(s.mailboxExpired) }
+                        }
+                    } catch (e: MailApiException) {
+                        withContext(Dispatchers.Main) {
+                            state = state.copy(isLoading = false)
+                            if (!silent) scope.launch { snackbar.showSnackbar(s.queryFailed) }
                         }
                     } catch (e: Exception) {
                         withContext(Dispatchers.Main) {
