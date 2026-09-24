@@ -117,6 +117,7 @@ import com.tempmail.app.ui.glass.GlassBarSpace
 import com.tempmail.app.ui.glass.GlassShell
 import com.tempmail.app.ui.glass.isGlassBlurSupported
 import com.tempmail.app.ui.components.MaterialBottomBar
+import com.tempmail.app.ui.components.AnnouncementDialog
 import com.tempmail.app.ui.theme.TempMailTheme
 import com.tempmail.app.ui.theme.THEME_ANIM_MS
 import com.tempmail.app.ui.theme.ThemeMode
@@ -229,6 +230,7 @@ internal fun TempMailApp(activity: ComponentActivity) {
         var downloadProgress by remember { mutableStateOf(0) }
         var poem by remember { mutableStateOf<PoemLine?>(null) }
 
+        var announcement by remember { mutableStateOf<Announcement?>(null) }
         val client = remember {
             OkHttpClient.Builder()
                 .connectTimeout(15, TimeUnit.SECONDS)
@@ -522,6 +524,13 @@ internal fun TempMailApp(activity: ComponentActivity) {
         }
 
 
+        // 远程公告: 启动时静默拉取; 版本大于本地已读版本才展示, 失败静默不影响主流程
+        LaunchedEffect(Unit) {
+            fetchAnnouncement(client)?.let { a ->
+                if (a.version > prefs.getInt("announcementReadVersion", 0)) announcement = a
+            }
+        }
+
         // 清理上次更新遗留的安装包
         LaunchedEffect(Unit) {
             withContext(Dispatchers.IO) {
@@ -786,5 +795,19 @@ internal fun TempMailApp(activity: ComponentActivity) {
                 )
             }
         }
+
+            // 远程公告弹窗(双主题原生观感): 更新/下载对话框与免责页优先
+            announcement?.takeIf { !showDisclaimer && !showUpdateDialog && !showDownloadProgress }
+                ?.let { a ->
+                    AnnouncementDialog(
+                        announcement = a,
+                        s = s,
+                        onClose = { announcement = null },
+                        onMute = {
+                            prefs.edit().putInt("announcementReadVersion", a.version).apply()
+                            announcement = null
+                        }
+                    )
+                }
 
 }

@@ -67,7 +67,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Create
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Edit
@@ -181,15 +180,6 @@ internal fun InboxTab(
     onState: ((AppState) -> AppState) -> Unit
 ) {
     var showBodyDialog by remember { mutableStateOf(false) }
-
-    // 远程公告：启动时静默拉取；版本大于本地已读版本才展示，失败静默不影响主流程
-    var announcement by remember { mutableStateOf<Announcement?>(null) }
-    LaunchedEffect(Unit) {
-        fetchAnnouncement(client)?.let { a ->
-            if (a.version > context.getSharedPreferences("app", Context.MODE_PRIVATE)
-                    .getInt("announcementReadVersion", 0)) announcement = a
-        }
-    }
     var dialogBody by remember { mutableStateOf("") }
     var dialogHtml by remember { mutableStateOf("") }
     var showPoem by remember { mutableStateOf(false) }
@@ -245,50 +235,6 @@ internal fun InboxTab(
             tint = MaterialTheme.colorScheme.primary)
         Spacer(Modifier.height(12.dp))
         Text(s.title, style = MaterialTheme.typography.headlineLarge)
-
-        // 远程公告卡：ThemedCard 桥接两套主题各自的卡片样式（Miuix/M3/Monet/暗色自动适配），
-        // 像原生页面的一部分而非弹窗。右上 X=本次关闭（不落盘）；"不再提醒"=写 prefs 永久忽略该版本。
-        announcement?.let { a ->
-            Spacer(Modifier.height(16.dp))
-            ThemedCard(Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.large) {
-                Column(Modifier.padding(16.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            s.announcement,
-                            style = MaterialTheme.typography.titleMedium,
-                            modifier = Modifier.weight(1f)
-                        )
-                        ThemedIconButton(onClick = { announcement = null }) {
-                            Icon(Icons.Default.Close, contentDescription = s.close)
-                        }
-                    }
-                    Spacer(Modifier.height(8.dp))
-                    Text(a.content, style = MaterialTheme.typography.bodyMedium)
-                    Spacer(Modifier.height(12.dp))
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            a.publishTime,
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.weight(1f)
-                        )
-                        if (a.url.isNotBlank()) {
-                            ThemedTextButton(onClick = {
-                                announcement = null
-                                try {
-                                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(a.url)))
-                                } catch (_: Exception) { }
-                            }) { Text(s.announcementView) }
-                        }
-                        ThemedTextButton(onClick = {
-                            context.getSharedPreferences("app", Context.MODE_PRIVATE)
-                                .edit().putInt("announcementReadVersion", a.version).apply()
-                            announcement = null
-                        }) { Text(s.announceMute) }
-                    }
-                }
-            }
-        }
         Spacer(Modifier.height(28.dp))
 
         ThemedButton(
