@@ -88,7 +88,11 @@ internal data class Strings(
     // 邮箱过期倒计时（收件箱卡片）：%s 为 "6d 23h" / "5h 23m" / "45s" 这类时长
     val expiresInFmt: String = "Expires in %s",
     // 自动轮询倒计时胶囊（收件箱页，生成按钮与邮箱卡片之间的空白区）
-    val autoRefresh: String = "Auto refresh"
+    val autoRefresh: String = "Auto refresh",
+    // 远程公告（GitHub Pages 静态 JSON）：15 种语言均已翻译，默认值作为未知语言的英文兜底
+    val announcement: String = "Announcement",
+    val gotIt: String = "Got it",
+    val announcementView: String = "View details"
 )
 
 internal fun strings(lang: String): Strings = when (lang) {
@@ -161,7 +165,10 @@ internal fun strings(lang: String): Strings = when (lang) {
         statusDown = "接続不可", testNow = "今すぐテスト",
         newMail = "新しいメールを受信しました",
         expiresInFmt = "%s後に期限切れ",
-        autoRefresh = "自動更新"
+        autoRefresh = "自動更新",
+        announcement = "お知らせ",
+        gotIt = "了解",
+        announcementView = "詳細を見る"
     )
     "ko" -> Strings(
         title = "임시 메일",
@@ -205,7 +212,10 @@ internal fun strings(lang: String): Strings = when (lang) {
         statusDown = "접속 불가", testNow = "지금 테스트",
         newMail = "새 메일이 도착했습니다",
         expiresInFmt = "%s 후 만료",
-        autoRefresh = "자동 새로고침"
+        autoRefresh = "자동 새로고침",
+        announcement = "공지",
+        gotIt = "확인",
+        announcementView = "자세히 보기"
     )
     "fr" -> Strings(
         title = "Temp Mail",
@@ -249,7 +259,10 @@ internal fun strings(lang: String): Strings = when (lang) {
         statusDown = "Inaccessible", testNow = "Tester maintenant",
         newMail = "Nouveau message reçu",
         expiresInFmt = "Expire dans %s",
-        autoRefresh = "Actualisation auto"
+        autoRefresh = "Actualisation auto",
+        announcement = "Annonce",
+        gotIt = "Compris",
+        announcementView = "Voir les détails"
     )
     "de" -> Strings(
         title = "Temp Mail",
@@ -293,7 +306,10 @@ internal fun strings(lang: String): Strings = when (lang) {
         statusDown = "Nicht erreichbar", testNow = "Jetzt testen",
         newMail = "Neue E-Mail erhalten",
         expiresInFmt = "Läuft ab in %s",
-        autoRefresh = "Auto-Aktualisierung"
+        autoRefresh = "Auto-Aktualisierung",
+        announcement = "Ankündigung",
+        gotIt = "Verstanden",
+        announcementView = "Details ansehen"
     )
     "es" -> Strings(
         title = "Correo Temporal",
@@ -337,7 +353,10 @@ internal fun strings(lang: String): Strings = when (lang) {
         statusDown = "Inaccesible", testNow = "Probar ahora",
         newMail = "Nuevo correo recibido",
         expiresInFmt = "Caduca en %s",
-        autoRefresh = "Actualización automática"
+        autoRefresh = "Actualización automática",
+        announcement = "Anuncio",
+        gotIt = "Entendido",
+        announcementView = "Ver detalles"
     )
     "pt" -> Strings(
         title = "Email Temporário",
@@ -381,7 +400,10 @@ internal fun strings(lang: String): Strings = when (lang) {
         statusDown = "Inacessível", testNow = "Testar agora",
         newMail = "Novo e-mail recebido",
         expiresInFmt = "Expira em %s",
-        autoRefresh = "Atualização automática"
+        autoRefresh = "Atualização automática",
+        announcement = "Anúncio",
+        gotIt = "Entendi",
+        announcementView = "Ver detalhes"
     )
     "ru" -> Strings(
         title = "Временная почта",
@@ -425,7 +447,10 @@ internal fun strings(lang: String): Strings = when (lang) {
         statusDown = "Недоступен", testNow = "Проверить сейчас",
         newMail = "Получено новое письмо",
         expiresInFmt = "Истекает через %s",
-        autoRefresh = "Автообновление"
+        autoRefresh = "Автообновление",
+        announcement = "Объявление",
+        gotIt = "Понятно",
+        announcementView = "Подробнее"
     )
     "it" -> Strings(
         title = "Email Temporanea",
@@ -469,7 +494,10 @@ internal fun strings(lang: String): Strings = when (lang) {
         statusDown = "Irraggiungibile", testNow = "Testa ora",
         newMail = "Nuova email ricevuta",
         expiresInFmt = "Scade tra %s",
-        autoRefresh = "Aggiornamento automatico"
+        autoRefresh = "Aggiornamento automatico",
+        announcement = "Annuncio",
+        gotIt = "Ho capito",
+        announcementView = "Vedi dettagli"
     )
     "ar" -> Strings(
         title = "بريد مؤقت",
@@ -513,7 +541,10 @@ internal fun strings(lang: String): Strings = when (lang) {
         statusDown = "غير متاح", testNow = "اختبر الآن",
         newMail = "وصل بريد جديد",
         expiresInFmt = "ينتهي بعد %s",
-        autoRefresh = "تحديث تلقائي"
+        autoRefresh = "تحديث تلقائي",
+        announcement = "إعلان",
+        gotIt = "فهمت",
+        announcementView = "عرض التفاصيل"
     )
     "hi" -> Strings(
         title = "अस्थायी मेल",
@@ -557,7 +588,10 @@ internal fun strings(lang: String): Strings = when (lang) {
         statusDown = "पहुँच योग्य नहीं", testNow = "अभी जाँचें",
         newMail = "नया मेल प्राप्त हुआ",
         expiresInFmt = "%s में समाप्त",
-        autoRefresh = "ऑटो रिफ्रेश"
+        autoRefresh = "ऑटो रिफ्रेश",
+        announcement = "घोषणा",
+        gotIt = "समझ गया",
+        announcementView = "विवरण देखें"
     )
     "vi" -> Strings(
         title = "Mail Tạm Thời",
@@ -601,7 +635,10 @@ internal fun strings(lang: String): Strings = when (lang) {
         statusDown = "Không truy cập được", testNow = "Kiểm tra ngay",
         newMail = "Đã nhận thư mới",
         expiresInFmt = "Hết hạn sau %s",
-        autoRefresh = "Tự động làm mới"
+        autoRefresh = "Tự động làm mới",
+        announcement = "Thông báo",
+        gotIt = "Đã hiểu",
+        announcementView = "Xem chi tiết"
     )
     "th" -> Strings(
         title = "อีเมลชั่วคราว",
@@ -645,7 +682,10 @@ internal fun strings(lang: String): Strings = when (lang) {
         statusDown = "เข้าถึงไม่ได้", testNow = "ทดสอบเลย",
         newMail = "ได้รับอีเมลใหม่",
         expiresInFmt = "หมดอายุใน %s",
-        autoRefresh = "รีเฟรชอัตโนมัติ"
+        autoRefresh = "รีเฟรชอัตโนมัติ",
+        announcement = "ประกาศ",
+        gotIt = "เข้าใจแล้ว",
+        announcementView = "ดูรายละเอียด"
     )
     "id" -> Strings(
         title = "Email Sementara",
@@ -689,7 +729,10 @@ internal fun strings(lang: String): Strings = when (lang) {
         statusDown = "Tidak dapat diakses", testNow = "Uji sekarang",
         newMail = "Email baru diterima",
         expiresInFmt = "Kedaluwarsa dalam %s",
-        autoRefresh = "Refresh otomatis"
+        autoRefresh = "Refresh otomatis",
+        announcement = "Pengumuman",
+        gotIt = "Mengerti",
+        announcementView = "Lihat detail"
     )
     else -> Strings(
         title = "临时邮箱",
@@ -733,7 +776,10 @@ internal fun strings(lang: String): Strings = when (lang) {
         statusDown = "无法访问", testNow = "立即检测",
         newMail = "收到新邮件",
         expiresInFmt = "%s后过期",
-        autoRefresh = "自动刷新"
+        autoRefresh = "自动刷新",
+        announcement = "公告",
+        gotIt = "知道了",
+        announcementView = "查看详情"
     )
 }
 
