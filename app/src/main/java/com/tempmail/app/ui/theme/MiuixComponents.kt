@@ -6,6 +6,8 @@ package com.tempmail.app.ui.theme
 // 组件按主题二选一，调用方只需把 M3 组件名换成 Themed* 封装。
 
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -22,6 +24,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -29,6 +32,7 @@ import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ButtonElevation
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.DividerDefaults
 import androidx.compose.material3.Icon
@@ -43,8 +47,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
@@ -662,5 +668,61 @@ fun ThemedDropdownValue(
                 modifier = Modifier.size(12.dp)
             )
         }
+    }
+}
+
+/**
+ * 自动轮询倒计时胶囊（收件箱页）：环形进度随秒数平滑消耗 + 「自动刷新 Ns」。
+ * 独立悬浮在生成按钮与邮箱卡片之间的空白区，与分段控件同一套配色节奏：
+ * HyperOS 取 Miuix 容器层级色（surfaceContainerHigh），Material3 取 secondaryContainer。
+ * 环形进度两个主题共用 M3 组件（Miuix 无环形进度），进度色取主题主色，轨道取次要内容色淡化。
+ *
+ * 秒数文本设最小宽度并居中：10s 与 9s 占同等宽度，胶囊中轴居中时不会逐秒左右抖动。
+ */
+@Composable
+fun ThemedPollCountdown(
+    seconds: Int,
+    label: String,
+    modifier: Modifier = Modifier
+) {
+    val hyper = LocalThemeStyle.current == ThemeStyle.HyperOS
+    val background = if (hyper) MiuixTheme.colorScheme.surfaceContainerHigh
+    else MaterialTheme.colorScheme.secondaryContainer
+    val contentColor = if (hyper) MiuixTheme.colorScheme.onSurfaceContainerHigh
+    else MaterialTheme.colorScheme.onSecondaryContainer
+    val secondaryColor = if (hyper) MiuixTheme.colorScheme.onSurfaceVariantSummary
+    else MaterialTheme.colorScheme.onSurfaceVariant
+    // 与页面轮询同一节奏：1s 线性插值，环在两次整数秒之间连续消耗（与迁移前行内显示一致）
+    val ringProgress by animateFloatAsState(
+        targetValue = seconds / 10f,
+        animationSpec = tween(1000, easing = LinearEasing),
+        label = "pollProgress"
+    )
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = modifier
+            .clip(RoundedCornerShape(percent = 50))
+            .background(background)
+            .padding(horizontal = 14.dp, vertical = 8.dp)
+    ) {
+        CircularProgressIndicator(
+            progress = { ringProgress },
+            modifier = Modifier.size(18.dp),
+            strokeWidth = 2.dp,
+            trackColor = secondaryColor.copy(alpha = 0.25f),
+            color = if (hyper) MiuixTheme.colorScheme.primary else MaterialTheme.colorScheme.primary,
+            strokeCap = StrokeCap.Round
+        )
+        Spacer(Modifier.width(8.dp))
+        Text(label,
+            style = if (hyper) MiuixTheme.textStyles.body2 else MaterialTheme.typography.labelMedium,
+            color = secondaryColor)
+        Spacer(Modifier.width(6.dp))
+        Text("${seconds}s",
+            style = if (hyper) MiuixTheme.textStyles.body2 else MaterialTheme.typography.labelMedium,
+            color = contentColor,
+            fontWeight = FontWeight.Medium,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.widthIn(min = 24.dp))
     }
 }

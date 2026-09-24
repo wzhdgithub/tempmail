@@ -15,10 +15,13 @@ import android.provider.Settings
 import android.text.Html
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
+import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.activity.ComponentActivity
 import androidx.core.content.FileProvider
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
@@ -31,6 +34,7 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
@@ -80,6 +84,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.compositeOver
@@ -123,6 +128,7 @@ import com.tempmail.app.ui.theme.ThemedDropdownValue
 import com.tempmail.app.ui.theme.ThemedIconButton
 import com.tempmail.app.ui.theme.ThemedLinearProgress
 import com.tempmail.app.ui.theme.ThemedListRow
+import com.tempmail.app.ui.theme.ThemedPollCountdown
 import com.tempmail.app.ui.theme.ThemedSegmentedTabs
 import com.tempmail.app.ui.theme.ThemedSwitch
 import com.tempmail.app.ui.theme.ThemedTextButton
@@ -132,6 +138,7 @@ import com.tempmail.app.ui.theme.themedCornerShape
 import com.tempmail.app.ui.theme.themedSurfaceColors
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import okhttp3.Call
@@ -139,6 +146,7 @@ import kotlin.random.Random
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -215,7 +223,23 @@ private data class Strings(
     val barBlur: String = "Blur",
     val barBlurDesc: String = "Blur the top and bottom bars",
     val barFloatDesc: String = "Floating bottom bar in Apple style",
-    val barGlassDesc: String = "Liquid glass effect for the floating bar"
+    val barGlassDesc: String = "Liquid glass effect for the floating bar",
+    // 邮箱服务双源（PearAPI 默认 / instanttempemail.com 备用）。15 种语言均已翻译，默认值作为未知语言的英文兜底。
+    val mailService: String = "Mail Service",
+    val mailServiceDesc: String = "Some sites silently block PearAPI domains; switch to the backup source and generate a new address if codes never arrive",
+    val mailboxExpired: String = "Mailbox expired, please generate a new one",
+    // 邮箱服务状态检测（设置-邮箱服务子页）：进入页面自动探测，也可手动重测
+    val serviceStatus: String = "Service Status",
+    val statusTesting: String = "Testing…",
+    val statusOk: String = "Normal",
+    val statusDown: String = "Unreachable",
+    val testNow: String = "Test now",
+    // 自动轮询发现新邮件时的提醒
+    val newMail: String = "New mail received",
+    // 邮箱过期倒计时（收件箱卡片）：%s 为 "6d 23h" / "5h 23m" / "45s" 这类时长
+    val expiresInFmt: String = "Expires in %s",
+    // 自动轮询倒计时胶囊（收件箱页，生成按钮与邮箱卡片之间的空白区）
+    val autoRefresh: String = "Auto refresh"
 )
 
 private fun strings(lang: String): Strings = when (lang) {
@@ -280,7 +304,15 @@ private fun strings(lang: String): Strings = when (lang) {
         monetEnable = "Monet カラーを有効化", monetAccent = "アクセントカラー",
         monetAccentDefault = "デフォルト", monetAccentCustom = "カスタム",
         barBlur = "ぼかし", barBlurDesc = "上部バーと下部バーのぼかしを有効にします",
-        barFloatDesc = "Apple 風のフローティングバーを使用します", barGlassDesc = "フローティングバーにリキッドグラス効果を適用します"
+        barFloatDesc = "Apple 風のフローティングバーを使用します", barGlassDesc = "フローティングバーにリキッドグラス効果を適用します",
+        mailService = "メールサービス",
+        mailServiceDesc = "一部のサイトは PearAPI ドメインの認証コードを黙って遮断します。届かない場合は予備ソースに切り替えて新しいアドレスを生成してください",
+        mailboxExpired = "メールボックスの有効期限が切れました。新しいものを生成してください",
+        serviceStatus = "サービス状態", statusTesting = "テスト中…", statusOk = "正常",
+        statusDown = "接続不可", testNow = "今すぐテスト",
+        newMail = "新しいメールを受信しました",
+        expiresInFmt = "%s後に期限切れ",
+        autoRefresh = "自動更新"
     )
     "ko" -> Strings(
         title = "임시 메일",
@@ -316,7 +348,15 @@ private fun strings(lang: String): Strings = when (lang) {
         monetEnable = "Monet 색상 사용", monetAccent = "강조 색상",
         monetAccentDefault = "기본", monetAccentCustom = "사용자 지정",
         barBlur = "블러", barBlurDesc = "상단 및 하단 바에 블러 효과 사용",
-        barFloatDesc = "Apple 스타일의 플로팅 하단 바 사용", barGlassDesc = "플로팅 하단 바에 리퀴드 글래스 효과 사용"
+        barFloatDesc = "Apple 스타일의 플로팅 하단 바 사용", barGlassDesc = "플로팅 하단 바에 리퀴드 글래스 효과 사용",
+        mailService = "메일 서비스",
+        mailServiceDesc = "일부 사이트는 PearAPI 도메인의 인증 코드를 조용히 차단합니다. 도착하지 않으면 백업 소스로 전환하고 새 주소를 생성하세요",
+        mailboxExpired = "메일함이 만료되었습니다. 새로 생성해 주세요",
+        serviceStatus = "서비스 상태", statusTesting = "테스트 중…", statusOk = "정상",
+        statusDown = "접속 불가", testNow = "지금 테스트",
+        newMail = "새 메일이 도착했습니다",
+        expiresInFmt = "%s 후 만료",
+        autoRefresh = "자동 새로고침"
     )
     "fr" -> Strings(
         title = "Temp Mail",
@@ -352,7 +392,15 @@ private fun strings(lang: String): Strings = when (lang) {
         monetEnable = "Activer les couleurs Monet", monetAccent = "Couleur d'accent",
         monetAccentDefault = "Par défaut", monetAccentCustom = "Personnalisée",
         barBlur = "Flou", barBlurDesc = "Active le flou des barres supérieure et inférieure",
-        barFloatDesc = "Barre inférieure flottante de style Apple", barGlassDesc = "Effet verre liquide pour la barre flottante"
+        barFloatDesc = "Barre inférieure flottante de style Apple", barGlassDesc = "Effet verre liquide pour la barre flottante",
+        mailService = "Service de messagerie",
+        mailServiceDesc = "Certains sites bloquent silencieusement les codes PearAPI ; si rien n'arrive, passez à la source de secours et générez une nouvelle adresse",
+        mailboxExpired = "Boîte mail expirée, veuillez en générer une nouvelle",
+        serviceStatus = "État du service", statusTesting = "Test en cours…", statusOk = "Normal",
+        statusDown = "Inaccessible", testNow = "Tester maintenant",
+        newMail = "Nouveau message reçu",
+        expiresInFmt = "Expire dans %s",
+        autoRefresh = "Actualisation auto"
     )
     "de" -> Strings(
         title = "Temp Mail",
@@ -388,7 +436,15 @@ private fun strings(lang: String): Strings = when (lang) {
         monetEnable = "Monet-Farben aktivieren", monetAccent = "Akzentfarbe",
         monetAccentDefault = "Standard", monetAccentCustom = "Benutzerdefiniert",
         barBlur = "Weichzeichnen", barBlurDesc = "Obere und untere Leiste weichzeichnen",
-        barFloatDesc = "Schwebende Leiste im Apple-Stil", barGlassDesc = "Flüssigglas-Effekt für die schwebende Leiste"
+        barFloatDesc = "Schwebende Leiste im Apple-Stil", barGlassDesc = "Flüssigglas-Effekt für die schwebende Leiste",
+        mailService = "E-Mail-Dienst",
+        mailServiceDesc = "Manche Seiten blockieren stumm PearAPI-Domains; wenn Codes nicht ankommen, zur Backup-Quelle wechseln und neue Adresse erstellen",
+        mailboxExpired = "Postfach abgelaufen, bitte ein neues erstellen",
+        serviceStatus = "Dienststatus", statusTesting = "Wird getestet…", statusOk = "Normal",
+        statusDown = "Nicht erreichbar", testNow = "Jetzt testen",
+        newMail = "Neue E-Mail erhalten",
+        expiresInFmt = "Läuft ab in %s",
+        autoRefresh = "Auto-Aktualisierung"
     )
     "es" -> Strings(
         title = "Correo Temporal",
@@ -424,7 +480,15 @@ private fun strings(lang: String): Strings = when (lang) {
         monetEnable = "Activar colores Monet", monetAccent = "Color de acento",
         monetAccentDefault = "Predeterminado", monetAccentCustom = "Personalizado",
         barBlur = "Desenfoque", barBlurDesc = "Desenfoca las barras superior e inferior",
-        barFloatDesc = "Barra inferior flotante estilo Apple", barGlassDesc = "Efecto de cristal líquido en la barra flotante"
+        barFloatDesc = "Barra inferior flotante estilo Apple", barGlassDesc = "Efecto de cristal líquido en la barra flotante",
+        mailService = "Servicio de correo",
+        mailServiceDesc = "Algunos sitios bloquean en silencio los códigos de PearAPI; si no llegan, cambia a la fuente alternativa y genera un nuevo correo",
+        mailboxExpired = "Buzón expirado, genera uno nuevo",
+        serviceStatus = "Estado del servicio", statusTesting = "Probando…", statusOk = "Normal",
+        statusDown = "Inaccesible", testNow = "Probar ahora",
+        newMail = "Nuevo correo recibido",
+        expiresInFmt = "Caduca en %s",
+        autoRefresh = "Actualización automática"
     )
     "pt" -> Strings(
         title = "Email Temporário",
@@ -460,7 +524,15 @@ private fun strings(lang: String): Strings = when (lang) {
         monetEnable = "Ativar cores Monet", monetAccent = "Cor de destaque",
         monetAccentDefault = "Padrão", monetAccentCustom = "Personalizada",
         barBlur = "Desfoque", barBlurDesc = "Desfoca as barras superior e inferior",
-        barFloatDesc = "Barra inferior flutuante estilo Apple", barGlassDesc = "Efeito de vidro líquido na barra flutuante"
+        barFloatDesc = "Barra inferior flutuante estilo Apple", barGlassDesc = "Efeito de vidro líquido na barra flutuante",
+        mailService = "Serviço de e-mail",
+        mailServiceDesc = "Alguns sites bloqueiam silenciosamente os códigos do PearAPI; se não chegarem, mude para a fonte alternativa e gere um novo e-mail",
+        mailboxExpired = "Caixa de correio expirada, gere uma nova",
+        serviceStatus = "Estado do serviço", statusTesting = "Testando…", statusOk = "Normal",
+        statusDown = "Inacessível", testNow = "Testar agora",
+        newMail = "Novo e-mail recebido",
+        expiresInFmt = "Expira em %s",
+        autoRefresh = "Atualização automática"
     )
     "ru" -> Strings(
         title = "Временная почта",
@@ -496,7 +568,15 @@ private fun strings(lang: String): Strings = when (lang) {
         monetEnable = "Включить цвета Monet", monetAccent = "Акцентный цвет",
         monetAccentDefault = "По умолчанию", monetAccentCustom = "Свой",
         barBlur = "Размытие", barBlurDesc = "Размывать верхнюю и нижнюю панели",
-        barFloatDesc = "Плавающая панель в стиле Apple", barGlassDesc = "Эффект жидкого стекла для плавающей панели"
+        barFloatDesc = "Плавающая панель в стиле Apple", barGlassDesc = "Эффект жидкого стекла для плавающей панели",
+        mailService = "Почтовый сервис",
+        mailServiceDesc = "Некоторые сайты молча блокируют коды PearAPI; если они не приходят, переключитесь на резервный источник и создайте новый адрес",
+        mailboxExpired = "Почтовый ящик истёк, создайте новый",
+        serviceStatus = "Состояние сервиса", statusTesting = "Проверка…", statusOk = "Норма",
+        statusDown = "Недоступен", testNow = "Проверить сейчас",
+        newMail = "Получено новое письмо",
+        expiresInFmt = "Истекает через %s",
+        autoRefresh = "Автообновление"
     )
     "it" -> Strings(
         title = "Email Temporanea",
@@ -532,7 +612,15 @@ private fun strings(lang: String): Strings = when (lang) {
         monetEnable = "Attiva colori Monet", monetAccent = "Colore d'accento",
         monetAccentDefault = "Predefinito", monetAccentCustom = "Personalizzato",
         barBlur = "Sfocatura", barBlurDesc = "Sfoca le barre superiore e inferiore",
-        barFloatDesc = "Barra inferiore fluttuante in stile Apple", barGlassDesc = "Effetto vetro liquido per la barra fluttuante"
+        barFloatDesc = "Barra inferiore fluttuante in stile Apple", barGlassDesc = "Effetto vetro liquido per la barra fluttuante",
+        mailService = "Servizio email",
+        mailServiceDesc = "Alcuni siti bloccano silenziosamente i codici PearAPI; se non arrivano, passa alla fonte di backup e genera una nuova email",
+        mailboxExpired = "Casella email scaduta, generarne una nuova",
+        serviceStatus = "Stato del servizio", statusTesting = "Test in corso…", statusOk = "Normale",
+        statusDown = "Irraggiungibile", testNow = "Testa ora",
+        newMail = "Nuova email ricevuta",
+        expiresInFmt = "Scade tra %s",
+        autoRefresh = "Aggiornamento automatico"
     )
     "ar" -> Strings(
         title = "بريد مؤقت",
@@ -568,7 +656,15 @@ private fun strings(lang: String): Strings = when (lang) {
         monetEnable = "تفعيل ألوان Monet", monetAccent = "لون التمييز",
         monetAccentDefault = "افتراضي", monetAccentCustom = "مخصّص",
         barBlur = "تمويه", barBlurDesc = "تفعيل تمويه الشريطين العلوي والسفلي",
-        barFloatDesc = "شريط سفلي عائم بأسلوب Apple", barGlassDesc = "تأثير الزجاج السائل للشريط العائم"
+        barFloatDesc = "شريط سفلي عائم بأسلوب Apple", barGlassDesc = "تأثير الزجاج السائل للشريط العائم",
+        mailService = "خدمة البريد",
+        mailServiceDesc = "تحظر بعض المواقع أكواد PearAPI بصمت؛ إذا لم تصل، بدّل إلى المصدر الاحتياطي وأنشئ بريدًا جديدًا",
+        mailboxExpired = "انتهت صلاحية صندوق البريد، يرجى إنشاء واحد جديد",
+        serviceStatus = "حالة الخدمة", statusTesting = "جارٍ الاختبار…", statusOk = "طبيعي",
+        statusDown = "غير متاح", testNow = "اختبر الآن",
+        newMail = "وصل بريد جديد",
+        expiresInFmt = "ينتهي بعد %s",
+        autoRefresh = "تحديث تلقائي"
     )
     "hi" -> Strings(
         title = "अस्थायी मेल",
@@ -604,7 +700,15 @@ private fun strings(lang: String): Strings = when (lang) {
         monetEnable = "Monet रंग चालू करें", monetAccent = "एक्सेंट रंग",
         monetAccentDefault = "डिफ़ॉल्ट", monetAccentCustom = "कस्टम",
         barBlur = "धुंधलापन", barBlurDesc = "ऊपरी और निचले बार को धुंधला करें",
-        barFloatDesc = "Apple शैली का फ़्लोटिंग बॉटम बार", barGlassDesc = "फ़्लोटिंग बार के लिए लिक्विड ग्लास प्रभाव"
+        barFloatDesc = "Apple शैली का फ़्लोटिंग बॉटम बार", barGlassDesc = "फ़्लोटिंग बार के लिए लिक्विड ग्लास प्रभाव",
+        mailService = "मेल सेवा",
+        mailServiceDesc = "कुछ साइटें PearAPI डोमेन के कोड चुपचाप ब्लॉक करती हैं; न आने पर बैकअप स्रोत पर स्विच करें और नया पता बनाएँ",
+        mailboxExpired = "मेलबॉक्स की समय सीमा समाप्त हो गई है, कृपया नया बनाएँ",
+        serviceStatus = "सेवा स्थिति", statusTesting = "जाँच हो रही है…", statusOk = "सामान्य",
+        statusDown = "पहुँच योग्य नहीं", testNow = "अभी जाँचें",
+        newMail = "नया मेल प्राप्त हुआ",
+        expiresInFmt = "%s में समाप्त",
+        autoRefresh = "ऑटो रिफ्रेश"
     )
     "vi" -> Strings(
         title = "Mail Tạm Thời",
@@ -640,7 +744,15 @@ private fun strings(lang: String): Strings = when (lang) {
         monetEnable = "Bật màu Monet", monetAccent = "Màu nhấn",
         monetAccentDefault = "Mặc định", monetAccentCustom = "Tùy chỉnh",
         barBlur = "Làm mờ", barBlurDesc = "Làm mờ thanh trên và thanh dưới",
-        barFloatDesc = "Thanh dưới nổi kiểu Apple", barGlassDesc = "Hiệu ứng kính lỏng cho thanh nổi"
+        barFloatDesc = "Thanh dưới nổi kiểu Apple", barGlassDesc = "Hiệu ứng kính lỏng cho thanh nổi",
+        mailService = "Dịch vụ mail",
+        mailServiceDesc = "Một số trang web âm thầm chặn mã PearAPI; nếu không nhận được, hãy chuyển sang nguồn dự phòng và tạo địa chỉ mới",
+        mailboxExpired = "Hộp thư đã hết hạn, vui lòng tạo hộp thư mới",
+        serviceStatus = "Trạng thái dịch vụ", statusTesting = "Đang kiểm tra…", statusOk = "Bình thường",
+        statusDown = "Không truy cập được", testNow = "Kiểm tra ngay",
+        newMail = "Đã nhận thư mới",
+        expiresInFmt = "Hết hạn sau %s",
+        autoRefresh = "Tự động làm mới"
     )
     "th" -> Strings(
         title = "อีเมลชั่วคราว",
@@ -676,7 +788,15 @@ private fun strings(lang: String): Strings = when (lang) {
         monetEnable = "เปิดใช้สี Monet", monetAccent = "สีเน้น",
         monetAccentDefault = "ค่าเริ่มต้น", monetAccentCustom = "กำหนดเอง",
         barBlur = "เบลอ", barBlurDesc = "เปิดเบลอแถบด้านบนและด้านล่าง",
-        barFloatDesc = "แถบล่างแบบลอยสไตล์ Apple", barGlassDesc = "เอฟเฟกต์กระจกเหลวสำหรับแถบลอย"
+        barFloatDesc = "แถบล่างแบบลอยสไตล์ Apple", barGlassDesc = "เอฟเฟกต์กระจกเหลวสำหรับแถบลอย",
+        mailService = "บริการเมล",
+        mailServiceDesc = "บางเว็บไซต์บล็อกรหัสจากโดเมน PearAPI โดยเงียบ ๆ หากไม่ได้รับ ให้สลับไปแหล่งสำรองและสร้างที่อยู่ใหม่",
+        mailboxExpired = "กล่องจดหมายหมดอายุแล้ว โปรดสร้างใหม่",
+        serviceStatus = "สถานะบริการ", statusTesting = "กำลังทดสอบ…", statusOk = "ปกติ",
+        statusDown = "เข้าถึงไม่ได้", testNow = "ทดสอบเลย",
+        newMail = "ได้รับอีเมลใหม่",
+        expiresInFmt = "หมดอายุใน %s",
+        autoRefresh = "รีเฟรชอัตโนมัติ"
     )
     "id" -> Strings(
         title = "Email Sementara",
@@ -712,7 +832,15 @@ private fun strings(lang: String): Strings = when (lang) {
         monetEnable = "Aktifkan warna Monet", monetAccent = "Warna aksen",
         monetAccentDefault = "Bawaan", monetAccentCustom = "Kustom",
         barBlur = "Blur", barBlurDesc = "Blur bilah atas dan bilah bawah",
-        barFloatDesc = "Bilah bawah mengambang gaya Apple", barGlassDesc = "Efek kaca cair untuk bilah mengambang"
+        barFloatDesc = "Bilah bawah mengambang gaya Apple", barGlassDesc = "Efek kaca cair untuk bilah mengambang",
+        mailService = "Layanan email",
+        mailServiceDesc = "Beberapa situs diam-diam memblokir kode PearAPI; jika tidak diterima, beralih ke sumber cadangan dan buat alamat baru",
+        mailboxExpired = "Kotak mail sudah kedaluwarsa, silakan buat baru",
+        serviceStatus = "Status layanan", statusTesting = "Menguji…", statusOk = "Normal",
+        statusDown = "Tidak dapat diakses", testNow = "Uji sekarang",
+        newMail = "Email baru diterima",
+        expiresInFmt = "Kedaluwarsa dalam %s",
+        autoRefresh = "Refresh otomatis"
     )
     else -> Strings(
         title = "临时邮箱",
@@ -748,7 +876,15 @@ private fun strings(lang: String): Strings = when (lang) {
         monetEnable = "启用 Monet 颜色", monetAccent = "强调色",
         monetAccentDefault = "默认", monetAccentCustom = "自定义",
         barBlur = "模糊", barBlurDesc = "启用顶栏和底栏的模糊效果",
-        barFloatDesc = "使用 Apple 风格的悬浮底栏", barGlassDesc = "启用悬浮底栏的液态玻璃效果"
+        barFloatDesc = "使用 Apple 风格的悬浮底栏", barGlassDesc = "启用悬浮底栏的液态玻璃效果",
+        mailService = "邮箱服务",
+        mailServiceDesc = "部分网站会静默拦截 PearAPI 域名的验证码，收不到时可切换到备用源并重新生成邮箱",
+        mailboxExpired = "邮箱已过期，请生成新邮箱",
+        serviceStatus = "服务状态", statusTesting = "检测中…", statusOk = "正常",
+        statusDown = "无法访问", testNow = "立即检测",
+        newMail = "收到新邮件",
+        expiresInFmt = "%s后过期",
+        autoRefresh = "自动刷新"
     )
 }
 
@@ -782,6 +918,19 @@ enum class BarStyle(val key: String) {
     }
 }
 
+// 邮箱服务源：PearAPI 为默认；instanttempemail.com（ITE）为备用源——
+// 其域名（fpklm.com）不在常见一次性邮箱黑名单内，部分网站（如 qoder）会静默丢弃
+// 发往 PearAPI 域名（catchmail.io / uberip.com 等）的验证码，却能正常投递到 ITE 域名。
+// fromKey 对未知值一律回退 PearAPI，禁止直接 valueOf。
+enum class MailProvider(val key: String) {
+    PearApi("pearapi"),
+    InstantTempEmail("ite");
+
+    companion object {
+        fun fromKey(key: String?): MailProvider = entries.find { it.key == key } ?: PearApi
+    }
+}
+
 data class EmailItem(
     val from: String,
     val subject: String,
@@ -793,7 +942,12 @@ data class EmailItem(
 
 data class HistoryEmail(
     val email: String,
-    val isActive: Boolean
+    val isActive: Boolean,
+    // instanttempemail.com 邮箱的查询令牌（收件箱钥匙）；PearAPI 邮箱无状态，恒为空串
+    val token: String = "",
+    // 邮箱过期时刻（epoch 毫秒，0=未知）：ITE 来自服务端 expires；PearAPI 为生成时刻+10 分钟。
+    // 历史条目带上它，切回历史邮箱时倒计时才不会丢
+    val expiresAt: Long = 0L
 )
 
 data class AppState(
@@ -815,7 +969,16 @@ data class AppState(
     // 动态配色（默认关闭）：seed = NoDynamicSeed 时两套主题的配色都与定制前完全一致
     val dynamicSeed: Int = NoDynamicSeed,
     val dynamicStyle: DynamicStyle = DynamicStyle.TonalSpot,
-    val dynamicContrast: Float = 0f
+    val dynamicContrast: Float = 0f,
+    // 邮箱服务源：仅决定"生成新邮箱"按钮调用哪个服务（持久化设置）。
+    // 当前邮箱的刷新不用它判断——按 iteToken 是否非空自动分流，切换服务不会打断现有邮箱的收件
+    val mailProvider: MailProvider = MailProvider.PearApi,
+    // instanttempemail.com 当前邮箱的查询令牌；非空 ⇒ 当前邮箱属于 ITE，刷新走 ITE 接口
+    val iteToken: String = "",
+    // 当前邮箱过期时刻（epoch 毫秒，0=未知，不显示倒计时）。
+    // ITE 由服务端 expires 提供（每次轮询回填校准）；PearAPI 接口只给时长"10 minutes"，
+    // 故取生成时刻+10 分钟估算，与实际行为一致
+    val mailboxExpiresAt: Long = 0L
 )
 
 /** 明暗三态读取：优先新键 themeMode，旧版本只有布尔 isDarkMode，做一次性兼容读取。 */
@@ -882,7 +1045,8 @@ class MainActivity : ComponentActivity() {
                     glassBlurEnabled = prefs.getBoolean("glassBlurEnabled", true),
                     dynamicSeed = prefs.getInt("dynamicSeed", NoDynamicSeed),
                     dynamicStyle = DynamicStyle.fromKey(prefs.getString("dynamicStyle", DynamicStyle.TonalSpot.key)),
-                    dynamicContrast = prefs.getFloat("dynamicContrast", 0f)
+                    dynamicContrast = prefs.getFloat("dynamicContrast", 0f),
+                    mailProvider = MailProvider.fromKey(prefs.getString("mailProvider", MailProvider.PearApi.key))
                 ))
             }
             val snackbar = remember { SnackbarHostState() }
@@ -1086,8 +1250,9 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
-            fun doRefresh(e: String, onDone: (count: Int, raw: String) -> Unit) {
-                state = state.copy(isLoading = true)
+            // silent=true 供自动轮询使用：不置 isLoading（避免生成按钮周期性闪禁用）、不弹错误提示
+            fun doRefresh(e: String, onDone: (count: Int, raw: String) -> Unit, silent: Boolean = false) {
+                if (!silent) state = state.copy(isLoading = true)
                 scope.launch(Dispatchers.IO) {
                     try {
                         val apiUrl = "https://api.pearapi.ai/api/email/".toHttpUrl().newBuilder()
@@ -1106,14 +1271,139 @@ class MainActivity : ComponentActivity() {
                         } else {
                             withContext(Dispatchers.Main) {
                                 state = state.copy(isLoading = false)
-                                scope.launch { snackbar.showSnackbar(j.optString("msg", s.queryFailed)) }
+                                if (!silent) scope.launch { snackbar.showSnackbar(j.optString("msg", s.queryFailed)) }
                             }
                         }
                     } catch (e: Exception) {
                         withContext(Dispatchers.Main) {
                             state = state.copy(isLoading = false)
-                            scope.launch { snackbar.showSnackbar(e.message ?: s.networkError) }
+                            if (!silent) scope.launch { snackbar.showSnackbar(e.message ?: s.networkError) }
                         }
+                    }
+                }
+            }
+
+            // instanttempemail.com 收件箱查询：GET /api/inbox/{token}
+            // 200 → {address, emails:[...], expires}；404 → 邮箱已过期（7 天有效期）
+            fun doRefreshIte(token: String, onDone: (count: Int, raw: String) -> Unit, silent: Boolean = false) {
+                if (!silent) state = state.copy(isLoading = true)
+                scope.launch(Dispatchers.IO) {
+                    try {
+                        val apiUrl = "https://instanttempemail.com/api/inbox/".toHttpUrl().newBuilder()
+                            .addPathSegment(token)
+                            .build()
+                        val r = Request.Builder()
+                            .url(apiUrl)
+                            .get().build()
+                        val resp = client.newCall(r).execute()
+                        val body = resp.body?.string() ?: ""
+                        if (resp.code == 404) {
+                            withContext(Dispatchers.Main) {
+                                state = state.copy(isLoading = false)
+                                if (!silent) scope.launch { snackbar.showSnackbar(s.mailboxExpired) }
+                            }
+                        } else if (resp.isSuccessful) {
+                            val cnt = try {
+                                JSONObject(body).optJSONArray("emails")?.length() ?: 0
+                            } catch (_: Exception) { 0 }
+                            withContext(Dispatchers.Main) { onDone(cnt, body) }
+                        } else {
+                            withContext(Dispatchers.Main) {
+                                state = state.copy(isLoading = false)
+                                if (!silent) scope.launch { snackbar.showSnackbar(s.queryFailed) }
+                            }
+                        }
+                    } catch (e: Exception) {
+                        withContext(Dispatchers.Main) {
+                            state = state.copy(isLoading = false)
+                            if (!silent) scope.launch { snackbar.showSnackbar(e.message ?: s.networkError) }
+                        }
+                    }
+                }
+            }
+
+            // 收件箱刷新统一入口：手动按钮与自动轮询共用同一套解析/合并/提示逻辑。
+            // silent=true（自动轮询）：不打扰用户——无"暂无邮件"提示，仅在新邮件到达时提醒
+            fun performInboxRefresh(silent: Boolean) {
+                val emailAtRefresh = state.email
+                val tokenAtRefresh = state.iteToken
+                // 当前邮箱归属按 iteToken 是否非空判断：非空 ⇒ ITE 邮箱（token 即收件箱钥匙）
+                val useIte = tokenAtRefresh.isNotBlank()
+                fun deliver(cnt: Int, raw: String) {
+                    val newItems = if (raw.isBlank()) emptyList()
+                        else if (useIte) parseIteEmails(raw, s.unknownSender)
+                        else parseEmails(raw, s.unknownSender)
+                    // ITE 每次轮询都返回服务端 expires：回填校准本地过期时刻（以服务端为准）
+                    val serverExpires = if (useIte && raw.isNotBlank()) {
+                        try { parseEmailTime(JSONObject(raw).optString("expires", "")) } catch (_: Exception) { 0L }
+                    } else 0L
+                    var mergedSize = -1
+                    var prevSize = -1
+                    // 基于写入时的最新状态更新，避免覆盖刷新期间切换的设置项
+                    val cur0 = state
+                    state = if (cur0.email != emailAtRefresh) {
+                        cur0.copy(isLoading = false)
+                    } else {
+                        val merged = mergeEmailItems(cur0.items, newItems)
+                        mergedSize = merged.size
+                        prevSize = cur0.items.size
+                        Log.d("MAIL_DEBUG", "API返回count=$cnt 解析后=${newItems.size} 已有=${cur0.items.size} 合并后=${merged.size}")
+                        // rawMessages 只在本次确实解析到邮件时追加：
+                        // ITE 空收件箱返回完整 JSON（非空串），若按 raw 非空判断，
+                        // 每次刷新都会往"原始数据"区塞一条相同内容
+                        val newRaws = if (newItems.isEmpty()) cur0.rawMessages
+                            else (cur0.rawMessages + raw).takeLast(5)
+                        cur0.copy(
+                            count = cnt, rawMessages = newRaws,
+                            items = merged, isLoading = false,
+                            mailboxExpiresAt = if (serverExpires > 0) serverExpires else cur0.mailboxExpiresAt
+                        )
+                    }
+                    val added = if (mergedSize >= 0 && prevSize >= 0) mergedSize - prevSize else 0
+                    scope.launch {
+                        if (added > 0) {
+                            // 新邮件到达：手动/自动都提醒（自动轮询存在的主要意义）
+                            snackbar.showSnackbar(if (added == 1) s.newMail else "${s.newMail} ×$added")
+                        } else if (!silent) {
+                            // 用解析结果而非 raw 判空：ITE 空收件箱的 raw 是完整 JSON（非空串）
+                            if (newItems.isEmpty()) snackbar.showSnackbar(s.noNewMail)
+                            else if (mergedSize == 0) snackbar.showSnackbar(s.parseError)
+                        }
+                    }
+                }
+                if (useIte) doRefreshIte(tokenAtRefresh, { cnt, raw -> deliver(cnt, raw) }, silent)
+                else doRefresh(emailAtRefresh, { cnt, raw -> deliver(cnt, raw) }, silent)
+            }
+
+            // 前台感知：后台时暂停轮询，省电省流量（ON_RESUME 恢复）
+            var isAppInForeground by remember { mutableStateOf(true) }
+            DisposableEffect(this@MainActivity) {
+                val observer = LifecycleEventObserver { _, event ->
+                    isAppInForeground = event == Lifecycle.Event.ON_RESUME
+                }
+                this@MainActivity.lifecycle.addObserver(observer)
+                onDispose { this@MainActivity.lifecycle.removeObserver(observer) }
+            }
+
+            // 自动轮询倒计时（秒）：收件箱刷新按钮旁显示，让用户直观看到下次刷新时机
+            var pollCountdownSec by remember { mutableStateOf(0) }
+
+            // 收件箱自动轮询：前台 + 非免责页 + 停留在收件箱 + 已有邮箱时，每 10 秒静默刷新一次；
+            // 请求进行中（isLoading）跳过该轮，避免与手动刷新叠加。
+            // 本地 fun 的 state 读取走 rememberSaveable 委托，循环内拿到的始终是最新值。
+            // key 用 s 而非 Unit：协程捕获的是首次组合的函数实例，切换语言后需重启才能用上新文案
+            LaunchedEffect(s) {
+                while (true) {
+                    // 秒级倒数驱动收件箱的 "9s" 显示；倒数到 0 触发一轮静默刷新
+                    for (t in 10 downTo 1) {
+                        pollCountdownSec = t
+                        delay(1000)
+                    }
+                    pollCountdownSec = 0
+                    if (isAppInForeground && !showDisclaimer &&
+                        state.currentTab == Tab.Inbox &&
+                        state.email.isNotBlank() && !state.isLoading) {
+                        performInboxRefresh(silent = true)
                     }
                 }
             }
@@ -1226,12 +1516,14 @@ class MainActivity : ComponentActivity() {
                         label = "tabContent"
                     ) { tab ->
                         when (tab) {
-                            Tab.Inbox -> InboxTab(contentPadding, glassOverlap, state, snackbar, scope, context, s, client, poem, ::doRefresh) { updater ->
+                            Tab.Inbox -> InboxTab(contentPadding, glassOverlap, state, snackbar, scope, context, s, client, poem, darkTheme, pollCountdownSec, { performInboxRefresh(silent = false) }) { updater ->
                                 state = updater(state)
                             }
                             Tab.History -> HistoryTab(contentPadding, glassOverlap, state, s) { email ->
+                                // 恢复历史邮箱时需同时恢复其查询令牌（ITE 邮箱的收件箱钥匙）与过期时刻
+                                val histEntry = state.history.find { it.email == email }
                                 val newHistory = if (state.email.isNotBlank() && state.email != email)
-                                    state.history + HistoryEmail(state.email, false)
+                                    state.history + HistoryEmail(state.email, false, state.iteToken, state.mailboxExpiresAt)
                                 else state.history
                                 val filteredHistory = newHistory.filter { it.email != email }
                                 state = state.copy(
@@ -1239,7 +1531,9 @@ class MainActivity : ComponentActivity() {
                                     count = 0,
                                     rawMessages = emptyList(),
                                     items = emptyList(),
-                                    history = filteredHistory
+                                    history = filteredHistory,
+                                    iteToken = histEntry?.token ?: "",
+                                    mailboxExpiresAt = histEntry?.expiresAt ?: 0L
                                 )
                             }
                             Tab.Settings -> SettingsTab(contentPadding, glassOverlap, state, s, snackbar, scope, client, settingsPageState, onCheckUpdate = { manual -> checkUpdate(manual) }) { newState ->
@@ -1269,6 +1563,9 @@ class MainActivity : ComponentActivity() {
                                 }
                                 if (newState.dynamicContrast != state.dynamicContrast) {
                                     prefs.edit().putFloat("dynamicContrast", newState.dynamicContrast).apply()
+                                }
+                                if (newState.mailProvider != state.mailProvider) {
+                                    prefs.edit().putString("mailProvider", newState.mailProvider.key).apply()
                                 }
                                 state = newState
                             }
@@ -1665,13 +1962,27 @@ private fun InboxTab(
     s: Strings,
     client: OkHttpClient,
     poem: PoemLine?,
-    doRefresh: (String, (Int, String) -> Unit) -> Unit,
+    // 当前明暗主题：邮件正文 WebView 的深色适配需要（算法暗化/forceDark）
+    darkTheme: Boolean,
+    // 自动轮询倒计时（秒，0=正在刷新或不显示）：让用户直观看到下次刷新时机
+    pollCountdownSec: Int,
+    onManualRefresh: () -> Unit,
     onState: ((AppState) -> AppState) -> Unit
 ) {
     var showBodyDialog by remember { mutableStateOf(false) }
     var dialogBody by remember { mutableStateOf("") }
     var dialogHtml by remember { mutableStateOf("") }
     var showPoem by remember { mutableStateOf(false) }
+
+    // 倒计时时钟：仅已知过期时刻时每秒跳动（无过期信息则不空转）
+    var nowMs by remember { mutableStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(state.mailboxExpiresAt) {
+        if (state.mailboxExpiresAt <= 0L) return@LaunchedEffect
+        while (true) {
+            nowMs = System.currentTimeMillis()
+            delay(1000)
+        }
+    }
 
     LaunchedEffect(poem != null) {
         if (poem != null) showPoem = true
@@ -1721,30 +2032,72 @@ private fun InboxTab(
                 onState { it.copy(isLoading = true) }
                 scope.launch(Dispatchers.IO) {
                     try {
-                        val r = Request.Builder()
-                            .url("https://api.pearapi.ai/api/email/?type=get")
-                            .get().build()
-                        val body = client.newCall(r).execute().body?.string() ?: ""
-                        val j = JSONObject(body)
-                        if (j.optString("code") == "200") {
-                            val newEmail = j.optString("email", "")
-                            withContext(Dispatchers.Main) {
-                                // 基于写入时的最新状态合并历史，避免覆盖请求期间的其他状态变更
-                                onState { cur ->
-                                    val newHistory = if (cur.email.isNotBlank())
-                                        cur.history + HistoryEmail(cur.email, false)
-                                    else cur.history
-                                    cur.copy(
-                                        email = newEmail, count = 0,
-                                        rawMessages = emptyList(), items = emptyList(),
-                                        history = newHistory, isLoading = false
-                                    )
+                        if (state.mailProvider == MailProvider.InstantTempEmail) {
+                            // instanttempemail.com：POST /api/create → {address, expires, token}
+                            // 邮箱 7 天有效；token 是收件箱查询钥匙，必须随邮箱一起保存
+                            val r = Request.Builder()
+                                .url("https://instanttempemail.com/api/create")
+                                .post("".toRequestBody(null))
+                                .build()
+                            val body = client.newCall(r).execute().body?.string() ?: ""
+                            val j = JSONObject(body)
+                            val newEmail = j.optString("address", "")
+                            val newToken = j.optString("token", "")
+                            if (newEmail.isNotBlank() && newToken.isNotBlank()) {
+                                // expires 为 ISO8601 UTC（含微秒），parseEmailTime 已兼容该格式
+                                val newExpiresAt = parseEmailTime(j.optString("expires", ""))
+                                withContext(Dispatchers.Main) {
+                                    // 基于写入时的最新状态合并历史，避免覆盖请求期间的其他状态变更
+                                    onState { cur ->
+                                        val newHistory = if (cur.email.isNotBlank())
+                                            cur.history + HistoryEmail(cur.email, false, cur.iteToken, cur.mailboxExpiresAt)
+                                        else cur.history
+                                        cur.copy(
+                                            email = newEmail, count = 0,
+                                            rawMessages = emptyList(), items = emptyList(),
+                                            history = newHistory, isLoading = false,
+                                            iteToken = newToken,
+                                            mailboxExpiresAt = newExpiresAt
+                                        )
+                                    }
+                                }
+                            } else {
+                                withContext(Dispatchers.Main) {
+                                    onState { it.copy(isLoading = false) }
+                                    scope.launch { snackbar.showSnackbar(s.fetchFailed) }
                                 }
                             }
                         } else {
-                            withContext(Dispatchers.Main) {
-                                onState { it.copy(isLoading = false) }
-                                scope.launch { snackbar.showSnackbar(j.optString("msg", s.fetchFailed)) }
+                            val r = Request.Builder()
+                                .url("https://api.pearapi.ai/api/email/?type=get")
+                                .get().build()
+                            val body = client.newCall(r).execute().body?.string() ?: ""
+                            val j = JSONObject(body)
+                            if (j.optString("code") == "200") {
+                                val newEmail = j.optString("email", "")
+                                // PearAPI 只返回时长（"time":"10 minutes"），无绝对时间戳，
+                                // 以生成时刻+10 分钟作为过期时刻（与实测行为一致）
+                                val newExpiresAt = System.currentTimeMillis() + 10 * 60_000L
+                                withContext(Dispatchers.Main) {
+                                    // 基于写入时的最新状态合并历史，避免覆盖请求期间的其他状态变更
+                                    onState { cur ->
+                                        val newHistory = if (cur.email.isNotBlank())
+                                            cur.history + HistoryEmail(cur.email, false, cur.iteToken, cur.mailboxExpiresAt)
+                                        else cur.history
+                                        cur.copy(
+                                            email = newEmail, count = 0,
+                                            rawMessages = emptyList(), items = emptyList(),
+                                            history = newHistory, isLoading = false,
+                                            iteToken = "",
+                                            mailboxExpiresAt = newExpiresAt
+                                        )
+                                    }
+                                }
+                            } else {
+                                withContext(Dispatchers.Main) {
+                                    onState { it.copy(isLoading = false) }
+                                    scope.launch { snackbar.showSnackbar(j.optString("msg", s.fetchFailed)) }
+                                }
                             }
                         }
                     } catch (e: Exception) {
@@ -1762,11 +2115,30 @@ private fun InboxTab(
 
         if (state.email.isNotBlank()) {
             Spacer(Modifier.height(20.dp))
+            // 自动轮询倒计时胶囊：从下方邮箱卡片的「复制/刷新」行移出，独立放在生成按钮与
+            // 邮箱卡片之间的空白区（页面中轴居中，wrap 内容宽度适配小屏）；倒数到 0 触发一次
+            // 静默刷新，轮询逻辑不变。轮询周期内 0 态不足一帧即被重置，故保持条件渲染不加动效
+            if (pollCountdownSec > 0) {
+                ThemedPollCountdown(seconds = pollCountdownSec, label = s.autoRefresh)
+                Spacer(Modifier.height(16.dp))
+            }
             ThemedCard(modifier = Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.large) {
                 Column(Modifier.padding(20.dp)) {
                     Text(s.yourEmail, style = MaterialTheme.typography.labelLarge)
                     Spacer(Modifier.height(12.dp))
                     Text("${s.receivedCount}: ${state.items.size}", style = MaterialTheme.typography.labelSmall)
+                    // 邮箱过期倒计时：只在已知过期时刻（>0）时显示，统一为 "...后过期" 文案
+                    if (state.mailboxExpiresAt > 0L) {
+                        val remaining = state.mailboxExpiresAt - nowMs
+                        val danger = remaining in 1..5 * 60_000L
+                        Text(
+                            if (remaining <= 0L) s.mailboxExpired
+                            else String.format(s.expiresInFmt, formatDurationWords(remaining)),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = if (remaining <= 0L || danger) MaterialTheme.colorScheme.error
+                            else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                     Spacer(Modifier.height(12.dp))
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(state.email,
@@ -1779,35 +2151,7 @@ private fun InboxTab(
                             scope.launch { snackbar.showSnackbar(s.copied) }
                         }) { Text(s.copy) }
                         FilledTonalButton(
-                            onClick = {
-                                val emailAtRefresh = state.email
-                                doRefresh(emailAtRefresh) { cnt, raw ->
-                                    val newItems = if (raw.isBlank()) emptyList()
-                                        else parseEmails(raw, s.unknownSender)
-                                    var mergedSize = -1
-                                    // 基于写入时的最新状态更新，避免覆盖刷新期间切换的设置项
-                                    onState { cur ->
-                                        if (cur.email != emailAtRefresh) {
-                                            cur.copy(isLoading = false)
-                                        } else {
-                                            val merged = mergeEmailItems(cur.items, newItems)
-                                            mergedSize = merged.size
-                                            Log.d("MAIL_DEBUG", "API返回count=$cnt 解析后=${newItems.size} 已有=${cur.items.size} 合并后=${merged.size}")
-                                            // rawMessages 在内存中同样限长，避免长会话单调增长
-                                            val newRaws = if (raw.isBlank()) cur.rawMessages
-                                                else (cur.rawMessages + raw).takeLast(5)
-                                            cur.copy(
-                                                count = cnt, rawMessages = newRaws,
-                                                items = merged, isLoading = false
-                                            )
-                                        }
-                                    }
-                                    scope.launch {
-                                        if (raw.isBlank()) snackbar.showSnackbar(s.noNewMail)
-                                        else if (mergedSize == 0) snackbar.showSnackbar(s.parseError)
-                                    }
-                                }
-                            },
+                            onClick = onManualRefresh,
                             shape = MaterialTheme.shapes.medium
                         ) { Text(s.refresh) }
                     }
@@ -1871,6 +2215,9 @@ private fun InboxTab(
                 }
             }
         }
+        // 玻璃底栏：内容可滚到浮起的底栏下方，末尾预留底栏高度使最后一项仍可完整滚出
+        // 必须在滚动 Column 内部才有效；放在 Column 外只是父布局里的游离元素，最后一项会被底栏遮住
+        if (bottomOverlap > 0.dp) Spacer(Modifier.height(bottomOverlap))
     }
 
     if (showBodyDialog) {
@@ -1898,8 +2245,20 @@ private fun InboxTab(
                                 settings.javaScriptEnabled = true
                                 settings.domStorageEnabled = true
                                 settings.allowFileAccess = false
-                                // 不自动加载远程图片，避免追踪像素泄露用户 IP 与"已读"状态
-                                settings.loadsImagesAutomatically = false
+                                // 直接加载远程图片（产品决策）：验证码邮件的 logo/图形验证码
+                                // 需要图片才能识别，优先可用性
+                                settings.loadsImagesAutomatically = true
+                                // 深色适配：亮色 HTML 在深色主题下会有白底黑字的割裂感。
+                                // API 33+ 用算法暗化（系统 WebView 官方替代方案）；
+                                // 低版本退回 forceDark（targetSdk 33+ 时仅在 33 以下设备生效，恰好互补）
+                                if (darkTheme) {
+                                    if (Build.VERSION.SDK_INT >= 33) {
+                                        settings.isAlgorithmicDarkeningAllowed = true
+                                    } else {
+                                        @Suppress("DEPRECATION")
+                                        settings.forceDark = WebSettings.FORCE_DARK_ON
+                                    }
+                                }
                                 setBackgroundColor(android.graphics.Color.TRANSPARENT)
                                 webChromeClient = object : WebChromeClient() {
                                     override fun onCreateWindow(
@@ -1964,7 +2323,16 @@ private fun InboxTab(
                                 } else if (looksLikeHtml(dialogBody)) {
                                     loadDataWithBaseURL("https://example.com", dialogBody, "text/html", "UTF-8", null)
                                 } else {
-                                    loadDataWithBaseURL("https://example.com", dialogBody, "text/plain", "UTF-8", null)
+                                    // 纯文本不再用 text/plain 加载（WebView 默认黑字，深色主题下不可读），
+                                    // 包一层带主题色 <pre> 的 HTML，明暗主题下都可读
+                                    val textColor = if (darkTheme) "#E6E1E5" else "#1C1B1F"
+                                    val esc = Html.escapeHtml(dialogBody)
+                                    loadDataWithBaseURL("https://example.com",
+                                        "<html><body style=\"margin:0;padding:4px\">" +
+                                            "<pre style=\"white-space:pre-wrap;word-wrap:break-word;" +
+                                            "font-family:monospace;font-size:14px;color:$textColor\">$esc</pre>" +
+                                            "</body></html>",
+                                        "text/html", "UTF-8", null)
                                 }
                             }.also { webViewHolder[0] = it }
                         },
@@ -1987,8 +2355,6 @@ private fun InboxTab(
                 }
             }
         )
-        // 玻璃底栏：内容可滚到浮起的底栏下方，末尾预留底栏高度使最后一项仍可完整显示
-        if (bottomOverlap > 0.dp) Spacer(Modifier.height(bottomOverlap))
     }
 }
 
@@ -2009,9 +2375,9 @@ private fun HistoryTab(
         Text(s.historyTitle, style = MaterialTheme.typography.headlineSmall)
         Spacer(Modifier.height(16.dp))
 
-        val allEmails = remember(state.email, state.history) {
+        val allEmails = remember(state.email, state.iteToken, state.history) {
             val list = mutableListOf<HistoryEmail>()
-            if (state.email.isNotBlank()) list.add(HistoryEmail(state.email, true))
+            if (state.email.isNotBlank()) list.add(HistoryEmail(state.email, true, state.iteToken, state.mailboxExpiresAt))
             list.addAll(state.history.reversed())
             list
         }
@@ -2072,7 +2438,7 @@ private fun HistoryTab(
     }
 }
 
-private enum class SettingsPage { Main, Language, DarkMode, Theme, Monet, ThemeSettings, About, Author }
+private enum class SettingsPage { Main, Language, DarkMode, Theme, Monet, ThemeSettings, About, Author, MailProvider }
 
 /** 用序号持久化子页（配置变更 / 进程重建后回到原页面，越界时回退设置主页）。 */
 private val SettingsPageSaver: Saver<SettingsPage, Int> = Saver(
@@ -2086,6 +2452,35 @@ private fun themeModeLabel(mode: ThemeMode, s: Strings): String = when (mode) {
     ThemeMode.Light -> s.themeLight
     ThemeMode.Dark -> s.themeDark
 }
+
+/** 邮箱服务健康检测结果。testing=true 表示探测进行中；ok 三态：null=未检测。 */
+private data class ServiceStatus(val testing: Boolean = false, val ok: Boolean? = null, val latencyMs: Long = 0)
+
+/**
+ * 邮箱服务健康探测：向服务的只读端点发一次 GET，返回（是否在线, 耗时毫秒）。
+ * - PearAPI：用 receive 查询一个不存在的邮箱（只读，不会分配新邮箱），预期 200；
+ * - ITE：查询不存在的 token，预期 404（"邮箱不存在"恰说明 API 本身在正常应答）。
+ * 2xx~4xx 均视为服务在线；仅 5xx 与网络异常（超时/DNS 失败）判为不可用。
+ */
+private suspend fun checkMailServiceHealth(client: OkHttpClient, provider: MailProvider): Pair<Boolean, Long> =
+    withContext(Dispatchers.IO) {
+        val start = System.currentTimeMillis()
+        try {
+            val url = when (provider) {
+                MailProvider.PearApi -> "https://api.pearapi.ai/api/email/".toHttpUrl().newBuilder()
+                    .addQueryParameter("type", "receive")
+                    .addQueryParameter("email", "healthcheck@healthcheck.invalid")
+                    .build()
+                MailProvider.InstantTempEmail ->
+                    "https://instanttempemail.com/api/inbox/00000000-0000-0000-0000-000000000000".toHttpUrl()
+            }
+            client.newCall(Request.Builder().url(url).get().build()).execute().use { resp ->
+                Pair(resp.code in 200..499, System.currentTimeMillis() - start)
+            }
+        } catch (_: Exception) {
+            Pair(false, System.currentTimeMillis() - start)
+        }
+    }
 
 @Composable
 private fun SettingsTab(
@@ -2134,6 +2529,12 @@ private fun SettingsTab(
                                         label = s.languageLabel,
                                         value = allLanguages.find { it.code == state.language }?.label ?: "中文",
                                         onClick = { page = SettingsPage.Language }
+                                    )
+                                    ThemedDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                                    SettingsItem(
+                                        label = s.mailService,
+                                        value = if (state.mailProvider == MailProvider.InstantTempEmail) "instanttempemail.com" else "PearAPI",
+                                        onClick = { page = SettingsPage.MailProvider }
                                     )
                                     // 明暗模式与底栏选项：HyperOS 主题下合并进「主题设置」，
                                     // Material3 主题下沿用原有的独立入口，两者不重复出现
@@ -2214,6 +2615,92 @@ private fun SettingsTab(
                                         if (i > 0) ThemedDivider(modifier = Modifier.padding(horizontal = 16.dp))
                                         LanguageOption(lang.label, state.language == lang.code,
                                             onClick = { onState(state.copy(language = lang.code)); page = SettingsPage.Main })
+                                    }
+                                }
+                            }
+                        }
+
+                        SettingsPage.MailProvider -> {
+                            ThemedIconButton(onClick = { page = SettingsPage.Main }) {
+                                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = s.back)
+                            }
+                            Spacer(Modifier.height(8.dp))
+                            Text(s.mailService, style = MaterialTheme.typography.headlineSmall)
+                            Spacer(Modifier.height(12.dp))
+                            Text(s.mailServiceDesc,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Spacer(Modifier.height(20.dp))
+
+                            // 服务状态检测：进入本页自动探测一次，之后可随时手动重测。
+                            // 状态用 remember 持有——离开子页即释放，回来重新探测，天然拿到最新状态
+                            val statuses = remember { mutableStateMapOf<MailProvider, ServiceStatus>() }
+                            fun runCheck() {
+                                MailProvider.entries.forEach { statuses[it] = ServiceStatus(testing = true) }
+                                // 两个服务并行探测，各自完成后独立更新自己的行
+                                MailProvider.entries.forEach { p ->
+                                    scope.launch {
+                                        val (ok, ms) = checkMailServiceHealth(client, p)
+                                        statuses[p] = ServiceStatus(ok = ok, latencyMs = ms)
+                                    }
+                                }
+                            }
+                            LaunchedEffect(Unit) { runCheck() }
+                            val checking = statuses.values.any { it.testing }
+
+                            ThemedCard(Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.large) {
+                                Column(Modifier.padding(start = 16.dp, end = 8.dp, top = 8.dp, bottom = 4.dp)) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text(s.serviceStatus, style = MaterialTheme.typography.titleSmall)
+                                        Spacer(Modifier.weight(1f))
+                                        ThemedTextButton(onClick = { runCheck() }, enabled = !checking) {
+                                            Text(s.testNow)
+                                        }
+                                    }
+                                    MailProvider.entries.forEachIndexed { i, p ->
+                                        if (i > 0) ThemedDivider()
+                                        val st = statuses[p]
+                                        // 状态点：灰=检测中/未检测，绿=正常，红=不可用
+                                        val dotColor = when {
+                                            st == null || st.testing -> MaterialTheme.colorScheme.onSurfaceVariant
+                                            st.ok == true -> Color(0xFF34C759)
+                                            else -> Color(0xFFFF3B30)
+                                        }
+                                        val statusText = when {
+                                            st == null || st.testing -> s.statusTesting
+                                            st.ok == true -> "${s.statusOk} · ${st.latencyMs} ms"
+                                            else -> s.statusDown
+                                        }
+                                        Row(
+                                            Modifier.fillMaxWidth().padding(vertical = 10.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Box(Modifier.size(8.dp).background(dotColor, CircleShape))
+                                            Spacer(Modifier.width(10.dp))
+                                            Text(
+                                                if (p == MailProvider.InstantTempEmail) "instanttempemail.com" else "PearAPI",
+                                                style = MaterialTheme.typography.bodyMedium
+                                            )
+                                            Spacer(Modifier.weight(1f))
+                                            Text(statusText,
+                                                style = MaterialTheme.typography.labelMedium,
+                                                color = if (st?.ok == false) MaterialTheme.colorScheme.error
+                                                else MaterialTheme.colorScheme.onSurfaceVariant)
+                                        }
+                                    }
+                                }
+                            }
+                            Spacer(Modifier.height(20.dp))
+
+                            ThemedCard(Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.large) {
+                                Column {
+                                    MailProvider.entries.forEachIndexed { i, p ->
+                                        if (i > 0) ThemedDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                                        LanguageOption(
+                                            if (p == MailProvider.InstantTempEmail) "instanttempemail.com" else "PearAPI",
+                                            state.mailProvider == p,
+                                            onClick = { onState(state.copy(mailProvider = p)); page = SettingsPage.Main }
+                                        )
                                     }
                                 }
                             }
@@ -2337,9 +2824,11 @@ private fun SettingsTab(
                     }
                     }
                 }
+                // 玻璃底栏：滚动内容末尾预留底栏高度，使其可完整滚出（底栏浮在其上）。
+                // 必须在滚动 Column 内部才有效：放在 Column 外只是 Box 里的游离元素，
+                // 最后一项会被底栏遮住、点不到（与 InboxTab 曾经的错位相同）
+                if (bottomOverlap > 0.dp) Spacer(Modifier.height(bottomOverlap))
             }
-            // 玻璃底栏：滚动内容末尾预留底栏高度，使其可完整滚出（底栏浮在其上）
-            if (bottomOverlap > 0.dp) Spacer(Modifier.height(bottomOverlap))
         }
         if (page == SettingsPage.Main) {
             Text("${s.version} ${BuildConfig.VERSION_NAME}",
@@ -3296,6 +3785,9 @@ private fun parseEmailTime(time: String): Long {
             else -> 0L
         }
     }
+    // 先截掉 ISO8601 的小数秒（如 .621297）：SimpleDateFormat 的 S 只支持毫秒，
+    // 6 位小数会被误当作毫秒数，多加约 10 分钟
+    val normalized = t.replace(Regex("\\.\\d+"), "")
     val formats = arrayOf(
         "yyyy-MM-dd HH:mm:ss",
         "yyyy-MM-dd'T'HH:mm:ss",
@@ -3312,12 +3804,71 @@ private fun parseEmailTime(time: String): Long {
             if (f.endsWith("'Z'") || f.endsWith("XXX")) {
                 sdf.timeZone = TimeZone.getTimeZone("UTC")
             }
-            val d = sdf.parse(t)
+            val d = sdf.parse(normalized)
             if (d != null) return d.time
         } catch (_: Exception) {
         }
     }
     return 0L
+}
+
+// instanttempemail.com 的 received_at（ISO8601 UTC，含微秒）转本地展示时间，
+// 与 PearAPI 的 "yyyy-MM-dd HH:mm:ss" 展示格式保持一致
+private fun formatIteTime(iso: String): String {
+    val ts = parseEmailTime(iso)
+    if (ts == 0L) return iso
+    return SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(java.util.Date(ts))
+}
+
+// 剩余毫秒 → 人类可读时长（取相邻两级单位，单位缩写全球通用）："6d 23h" / "5h 23m" / "23m 45s" / "45s"
+private fun formatDurationWords(remMs: Long): String {
+    val totalSec = remMs / 1000
+    val d = totalSec / 86400
+    val h = totalSec % 86400 / 3600
+    val m = totalSec % 3600 / 60
+    val sec = totalSec % 60
+    return when {
+        d > 0 -> "${d}d ${h}h"
+        h > 0 -> "${h}h ${m}m"
+        m > 0 -> "${m}m ${sec}s"
+        else -> "${sec}s"
+    }
+}
+
+// instanttempemail.com 收件箱响应解析：GET /api/inbox/{token} →
+// {address, emails:[{id, from, subject, body_text, body_html, received_at, is_read}], expires}
+// emails 为原生 JSON 数组，字段名与 PearAPI 的 receivedata 不同，单独映射
+private fun parseIteEmails(body: String, defaultFrom: String): List<EmailItem> {
+    val result = mutableListOf<EmailItem>()
+    try {
+        val arr = JSONObject(body).optJSONArray("emails") ?: return emptyList()
+        for (i in 0 until arr.length()) {
+            val o = arr.optJSONObject(i) ?: continue
+            try {
+                val from = o.optString("from", "")
+                val subject = o.optString("subject", "")
+                val receivedAt = o.optString("received_at", "")
+                val html = o.optString("body_html", "")
+                var text = o.optString("body_text", "")
+                if (text.isBlank() && html.isNotBlank()) text = stripHtml(html)
+                result.add(
+                    EmailItem(
+                        from = if (from.isBlank()) defaultFrom else from,
+                        subject = subject,
+                        time = formatIteTime(receivedAt),
+                        body = text,
+                        htmlBody = html,
+                        timestamp = parseEmailTime(receivedAt)
+                    )
+                )
+            } catch (e: Exception) {
+                Log.d("MAIL_DEBUG", "parse ite item $i failed: ${arr.opt(i)}", e)
+            }
+        }
+    } catch (e: Exception) {
+        Log.d("MAIL_DEBUG", "parseIteEmails failed for: ${body.take(200)}", e)
+    }
+    return result
 }
 
 // AppState 序列化为 JSON，用于 rememberSaveable 在配置更改/进程重建后恢复状态。
@@ -3336,6 +3887,9 @@ private fun appStateToJson(state: AppState): String {
     j.put("dynamicStyle", state.dynamicStyle.key)
     j.put("dynamicContrast", state.dynamicContrast.toDouble())
     j.put("tab", state.currentTab.ordinal)
+    j.put("mailProvider", state.mailProvider.key)
+    j.put("iteToken", state.iteToken)
+    j.put("mailboxExpiresAt", state.mailboxExpiresAt)
     // items 限制条数、正文截断、且不保存 htmlBody（完整 HTML 动辄数十 KB），
     // 防止写入 Bundle 越过 Binder 事务上限导致 TransactionTooLargeException
     val items = JSONArray()
@@ -3357,6 +3911,8 @@ private fun appStateToJson(state: AppState): String {
         hist.put(JSONObject().apply {
             put("email", h.email)
             put("active", h.isActive)
+            put("token", h.token)
+            put("expiresAt", h.expiresAt)
         })
     }
     j.put("history", hist)
@@ -3390,7 +3946,7 @@ private fun appStateFromJson(json: String): AppState? {
         j.optJSONArray("history")?.let { arr ->
             for (i in 0 until arr.length()) {
                 val o = arr.optJSONObject(i) ?: continue
-                hist.add(HistoryEmail(o.optString("email", ""), o.optBoolean("active", false)))
+                hist.add(HistoryEmail(o.optString("email", ""), o.optBoolean("active", false), o.optString("token", ""), o.optLong("expiresAt", 0L)))
             }
         }
         AppState(
@@ -3409,7 +3965,10 @@ private fun appStateFromJson(json: String): AppState? {
             glassBlurEnabled = j.optBoolean("glassBlurEnabled", true),
             dynamicSeed = j.optInt("dynamicSeed", NoDynamicSeed),
             dynamicStyle = DynamicStyle.fromKey(j.optString("dynamicStyle", DynamicStyle.TonalSpot.key)),
-            dynamicContrast = j.optDouble("dynamicContrast", 0.0).toFloat()
+            dynamicContrast = j.optDouble("dynamicContrast", 0.0).toFloat(),
+            mailProvider = MailProvider.fromKey(j.optString("mailProvider", MailProvider.PearApi.key)),
+            iteToken = j.optString("iteToken", ""),
+            mailboxExpiresAt = j.optLong("mailboxExpiresAt", 0L)
         )
     } catch (e: Exception) {
         null
