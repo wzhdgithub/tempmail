@@ -164,6 +164,7 @@ import com.tempmail.app.ui.components.MiuixFloatingBottomBar
 import com.tempmail.app.ui.screens.HistoryTab
 import com.tempmail.app.ui.screens.InboxTab
 import com.tempmail.app.ui.screens.settings.SettingsTab
+import com.tempmail.app.updater.*
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -346,47 +347,32 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
+            // 检查更新编排: 网络/解析已抽至 updater/AppUpdater.kt, 此处只做 UI 反馈。
+            // 行为与原实现一一对应: 限流/异常 → updateFail(手动时), 无资产 → 静默,
+            // 版本不高于当前 → alreadyLatest(手动时), 有新版本 → 填状态并弹更新对话框。
             fun checkUpdate(isManual: Boolean = false) {
                 if (isManual) scope.launch { snackbar.showSnackbar(s.updating) }
                 scope.launch(Dispatchers.IO) {
                     try {
-                        val r = Request.Builder()
-                            .url("https://api.github.com/repos/wzhdgithub/tempmail/releases/latest")
-                            .header("Accept", "application/vnd.github.v3+json")
-                            .get().build()
-                        val body = client.newCall(r).execute().body?.string() ?: ""
-                        val j = JSONObject(body)
-                        val tag = j.optString("tag_name", "").removePrefix("v").trim()
-                        if (tag.isBlank()) {
-                            // 非 Release 响应（限流 403 / 拦截页 / API 变更），不能误报为"已最新"
-                            if (isManual) withContext(Dispatchers.Main) {
+                        when (val r = parseRelease(fetchLatestReleaseBody(client))) {
+                            is ReleaseCheck.InvalidRelease -> if (isManual) withContext(Dispatchers.Main) {
                                 scope.launch { snackbar.showSnackbar(s.updateFail) }
                             }
-                            return@launch
-                        }
-                        val cur = BuildConfig.VERSION_NAME
-                        if (versionCompare(tag, cur) <= 0) {
-                            if (isManual) withContext(Dispatchers.Main) {
-                                scope.launch { snackbar.showSnackbar(s.alreadyLatest) }
+                            is ReleaseCheck.NoAsset -> Unit
+                            is ReleaseCheck.Release -> {
+                                val cur = BuildConfig.VERSION_NAME
+                                if (versionCompare(r.tag, cur) <= 0) {
+                                    if (isManual) withContext(Dispatchers.Main) {
+                                        scope.launch { snackbar.showSnackbar(s.alreadyLatest) }
+                                    }
+                                } else withContext(Dispatchers.Main) {
+                                    updateTag = r.tag
+                                    updateUrl = r.url
+                                    updateSha = r.sha256
+                                    updateBody = r.notes
+                                    showUpdateDialog = true
+                                }
                             }
-                            return@launch
-                        }
-                        val assets = j.optJSONArray("assets") ?: return@launch
-                        val asset = assets.getJSONObject(0)
-                        val url = asset.optString("browser_download_url", "")
-                        if (url.isBlank()) return@launch
-                        val releaseNotes = j.optString("body", "")
-                        // 优先使用 GitHub Release asset 的 digest 字段，其次从发版说明中提取 64 位十六进制哈希
-                        var sha = asset.optString("digest", "").removePrefix("sha256:").trim()
-                        if (!sha.matches(Regex("^[0-9a-fA-F]{64}$"))) {
-                            sha = Regex("\\b[0-9a-fA-F]{64}\\b").find(releaseNotes)?.value ?: ""
-                        }
-                        withContext(Dispatchers.Main) {
-                            updateTag = tag
-                            updateUrl = url
-                            updateSha = sha
-                            updateBody = releaseNotes
-                            showUpdateDialog = true
                         }
                     } catch (e: Exception) {
                         if (isManual) withContext(Dispatchers.Main) {
@@ -840,15 +826,3 @@ class MainActivity : ComponentActivity() {
 /**
  * Miuix 悬浮底栏：既有样式，视觉与行为保持与定制前一致。
  */
-private fun versionCompare(a: String, b: String): Int {
-    val aParts = a.split(".").map { it.toIntOrNull() ?: 0 }
-    val bParts = b.split(".").map { it.toIntOrNull() ?: 0 }
-    val maxLen = maxOf(aParts.size, bParts.size)
-    for (i in 0 until maxLen) {
-        val av = aParts.getOrElse(i) { 0 }
-        val bv = bParts.getOrElse(i) { 0 }
-        if (av != bv) return av - bv
-    }
-    return 0
-}
-
