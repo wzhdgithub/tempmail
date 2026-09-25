@@ -228,55 +228,35 @@ internal fun SettingsTab(
     val ctx = LocalContext.current
     BackHandler(page != SettingsPage.Main) { page = SettingsPage.Main }
 
-    // 关于页整页动态渐变（KernelSU 同款观感）：两层颜色云交叉漂移——
-    // 底层垂直方向 蓝→白→粉→白→蓝 循环滚动，顶层水平方向 紫/蓝色云反向漂移
-    // （云团间为透明段，透出底层），两层异速 → 颜色区域在 2D 方向相互流动。
-    // 固定紫粉蓝配色（KernelSU 原版默认观感），深色模式取同色相暗版。
+    // 关于页整页动态渐变（KernelSU 同款固定配色）：淡紫 → 白 → 淡粉的柔和色带
+    // 沿屏幕连续滚动（相位循环、无缝）。深色模式取同色相暗版避免刺眼。
     // 渐变挂最外层 Box 铺满全屏（含状态栏/底栏后面）。
     val aboutBackground: Modifier = if (page == SettingsPage.About) {
         val dark = MaterialTheme.colorScheme.background.luminance() < 0.5f
-        val blue = if (dark) Color(0xFF202A44) else Color(0xFFBFD3F8)
         val purple = if (dark) Color(0xFF2B2340) else Color(0xFFD9CDF6)
         val pink = if (dark) Color(0xFF3A2433) else Color(0xFFF6D5E5)
-        val plain = if (dark) Color(0xFF16151E) else Color(0xFFF7F4FB)
-        val transition = rememberInfiniteTransition(label = "aboutGradient")
-        val vPhase by transition.animateFloat(
-            initialValue = 0f, targetValue = 1f,
-            animationSpec = infiniteRepeatable(tween(10000, easing = LinearEasing)),
-            label = "aboutGradientV"
+        val plain = if (dark) Color(0xFF1D1A24) else Color(0xFFF7F4FB)
+        val phase by rememberInfiniteTransition(label = "aboutGradient").animateFloat(
+            initialValue = 0f,
+            targetValue = 1f,
+            animationSpec = infiniteRepeatable(tween(8000, easing = LinearEasing)),
+            label = "aboutGradientPhase"
         )
-        val hPhase by transition.animateFloat(
-            initialValue = 0f, targetValue = 1f,
-            animationSpec = infiniteRepeatable(tween(7000, easing = LinearEasing)),
-            label = "aboutGradientH"
-        )
-        // 环状色带：a(0) → 白/透明(1/4) → b(1/2) → 白/透明(3/4) → a(1)，采样点随相位循环滚动
-        fun band(u: Float, a: Color, b: Color): Color = when {
-            u < 0.25f -> lerp(a, plain, u * 4f)
-            u < 0.50f -> lerp(plain, b, (u - 0.25f) * 4f)
-            u < 0.75f -> lerp(b, plain, (u - 0.50f) * 4f)
-            else -> lerp(plain, a, (u - 0.75f) * 4f)
+        // 周期色带：紫(0) → 白(1/4) → 粉(1/2) → 白(3/4) → 紫(1)。
+        // 13 个采样点（每段 ≥3 个）保证线性插值重建出的波形平滑，不会出现条纹。
+        fun band(u: Float): Color = when {
+            u < 0.25f -> lerp(purple, plain, u * 4f)
+            u < 0.50f -> lerp(plain, pink, (u - 0.25f) * 4f)
+            u < 0.75f -> lerp(pink, plain, (u - 0.50f) * 4f)
+            else -> lerp(plain, purple, (u - 0.75f) * 4f)
         }
-        // 顶层色云的间隔段是全透明：透出底层，形成"色云漂浮"而非整面染色
-        fun cloud(u: Float, a: Color, b: Color): Color = when {
-            u < 0.25f -> lerp(a.copy(alpha = 0.55f), Color.Transparent, u * 4f)
-            u < 0.50f -> lerp(Color.Transparent, b.copy(alpha = 0.55f), (u - 0.25f) * 4f)
-            u < 0.75f -> lerp(b.copy(alpha = 0.55f), Color.Transparent, (u - 0.50f) * 4f)
-            else -> lerp(Color.Transparent, a.copy(alpha = 0.55f), (u - 0.75f) * 4f)
-        }
-        val verticalBand = Brush.verticalGradient(
-            colorStops = Array(7) { i ->
-                val stop = i / 6f
-                stop to band((stop + vPhase) % 1f, blue, pink)
+        val gradient = Brush.verticalGradient(
+            colorStops = Array(13) { i ->
+                val stop = i / 12f
+                stop to band((stop + phase) % 1f)
             }
         )
-        val horizontalCloud = Brush.horizontalGradient(
-            colorStops = Array(7) { i ->
-                val stop = i / 6f
-                stop to cloud((1f - stop + hPhase) % 1f, purple, blue)
-            }
-        )
-        Modifier.background(verticalBand).background(horizontalCloud)
+        Modifier.background(gradient)
     } else Modifier
 
     Box(Modifier.fillMaxSize().then(aboutBackground)) {
