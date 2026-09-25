@@ -247,10 +247,14 @@ internal fun SettingsTab(
     val aboutPurple = if (aboutDark) Color(0xFF4A3D6E) else Color(0xFFC7B0F2)
     val aboutPink = if (aboutDark) Color(0xFF57344C) else Color(0xFFF3BCD9)
     val aboutBlue = if (aboutDark) Color(0xFF2E3D5C) else Color(0xFFC3D6F2)
-    // 映射色（Logo/名字染色）：浅色模式 = 背景色加深提饱和；深色模式 = 轻微提亮
-    val mapPurple = if (aboutDark) Color(0xFF6A57A0) else Color(0xFF9F7FE8)
-    val mapPink = if (aboutDark) Color(0xFF7E4A6B) else Color(0xFFE890BE)
-    val mapBlue = if (aboutDark) Color(0xFF485F8F) else Color(0xFF7E9BD8)
+    // 映射色（Logo/名字染色）：浅色模式 = 背景色加深提饱和；深色模式 = 轻微提亮。
+    // 【加深调节】mapDeepen：映射色再向黑收的比例。0f = 不加深，越大越深；
+    // 建议 0f ~ 0.25f，超过 0.3 会开始发灰。想单独调某个颜色，直接改下面三个 0x 色值。
+    val mapDeepen = if (aboutDark) 0.05f else 0.20f
+    fun deepen(c: Color): Color = lerp(c, Color.Black, mapDeepen)
+    val mapPurple = deepen(if (aboutDark) Color(0xFF6A57A0) else Color(0xFF9F7FE8))
+    val mapPink = deepen(if (aboutDark) Color(0xFF7E4A6B) else Color(0xFFE890BE))
+    val mapBlue = deepen(if (aboutDark) Color(0xFF485F8F) else Color(0xFF7E9BD8))
     val aboutPhase by rememberInfiniteTransition(label = "aboutGradient").animateFloat(
         initialValue = 0f,
         targetValue = 1f,
