@@ -94,6 +94,7 @@ import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.LocalView
@@ -145,6 +146,10 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import okhttp3.Call
+import kotlin.math.PI
+import kotlin.math.cos
+import kotlin.math.hypot
+import kotlin.math.sin
 import kotlin.random.Random
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
@@ -229,8 +234,8 @@ internal fun SettingsTab(
     BackHandler(page != SettingsPage.Main) { page = SettingsPage.Main }
 
     // 关于页整页动态渐变（KernelSU 同款固定配色）：淡紫 → 白 → 淡粉的柔和色带
-    // 沿屏幕连续滚动（相位循环、无缝）。深色模式取同色相暗版避免刺眼。
-    // 渐变挂最外层 Box 铺满全屏（含状态栏/底栏后面）。
+    // 沿斜向连续滚动（相位循环、无缝，流动方向与水平线约 35° 夹角）。
+    // 深色模式取同色相暗版避免刺眼。渐变挂最外层 Box 铺满全屏（含状态栏/底栏后面）。
     val aboutBackground: Modifier = if (page == SettingsPage.About) {
         val dark = MaterialTheme.colorScheme.background.luminance() < 0.5f
         val purple = if (dark) Color(0xFF2B2340) else Color(0xFFD9CDF6)
@@ -250,11 +255,21 @@ internal fun SettingsTab(
             u < 0.75f -> lerp(pink, plain, (u - 0.50f) * 4f)
             else -> lerp(plain, purple, (u - 0.75f) * 4f)
         }
-        val gradient = Brush.verticalGradient(
+        // 斜向渐变：方向向量与水平线约 35°（偏横向，太陡会看不出斜），
+        // 线段过屏幕中心、长度取对角线 1.1 倍，任何屏幕比例下都能覆盖全屏（越界部分自动 clamp）。
+        val screenW = LocalConfiguration.current.screenWidthDp.toFloat()
+        val screenH = LocalConfiguration.current.screenHeightDp.toFloat()
+        val angle = 35f / 180f * PI.toFloat()
+        val dir = Offset(cos(angle), sin(angle))
+        val diag = hypot(screenW, screenH) * 1.1f
+        val center = Offset(screenW / 2f, screenH / 2f)
+        val gradient = Brush.linearGradient(
             colorStops = Array(13) { i ->
                 val stop = i / 12f
                 stop to band((stop + phase) % 1f)
-            }
+            },
+            start = center - dir * (diag / 2f),
+            end = center + dir * (diag / 2f)
         )
         Modifier.background(gradient)
     } else Modifier
