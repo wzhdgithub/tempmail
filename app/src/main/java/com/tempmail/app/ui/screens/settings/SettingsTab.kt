@@ -93,6 +93,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.compositeOver
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -239,17 +240,19 @@ internal fun SettingsTab(
     // 背景独立成层并注册为 layerBackdrop，供链接卡片 drawBackdrop 做毛玻璃。
     // 纯 drawBehind，无 BlurMaskFilter/RenderEffect。
     val aboutBackdrop = rememberLayerBackdrop()
+    // 关于页动态色源：背景色斑与 Logo/软件名染色共用同一组颜色和相位，
+    // Logo/名字内部的颜色就是背景同源色、随同一节奏流动 → 真实的"背景映射"。
+    val aboutDark = MaterialTheme.colorScheme.background.luminance() < 0.5f
+    val aboutPurple = if (aboutDark) Color(0xFF4A3D6E) else Color(0xFFC7B0F2)
+    val aboutPink = if (aboutDark) Color(0xFF57344C) else Color(0xFFF3BCD9)
+    val aboutPhase by rememberInfiniteTransition(label = "aboutGradient").animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(tween(7000, easing = LinearEasing)),
+        label = "aboutGradientPhase"
+    )
     val aboutBackground: Modifier = if (page == SettingsPage.About) {
-        val dark = MaterialTheme.colorScheme.background.luminance() < 0.5f
-        val base = if (dark) Color(0xFF1D1A24) else Color(0xFFF7F4FB)
-        val purple = if (dark) Color(0xFF4A3D6E) else Color(0xFFC7B0F2)
-        val pink = if (dark) Color(0xFF57344C) else Color(0xFFF3BCD9)
-        val phase by rememberInfiniteTransition(label = "aboutGradient").animateFloat(
-            initialValue = 0f,
-            targetValue = 1f,
-            animationSpec = infiniteRepeatable(tween(7000, easing = LinearEasing)),
-            label = "aboutGradientPhase"
-        )
+        val base = if (aboutDark) Color(0xFF1D1A24) else Color(0xFFF7F4FB)
         Modifier.drawBehind {
             val w = size.width
             val h = size.height
@@ -263,8 +266,8 @@ internal fun SettingsTab(
                 bx: Float, by: Float, ax: Float, ay: Float,
                 px: Float, py: Float, r: Float
             ) {
-                val cx = w * (bx + ax * sin(tau * (phase + px)))
-                val cy = h * (by + ay * sin(tau * (phase + py)))
+                val cx = w * (bx + ax * sin(tau * (aboutPhase + px)))
+                val cy = h * (by + ay * sin(tau * (aboutPhase + py)))
                 val radius = r * minDim
                 drawCircle(
                     brush = Brush.radialGradient(
@@ -282,10 +285,10 @@ internal fun SettingsTab(
             }
             // 四斑对角对称分布（紫左上/右下，粉右上/左下），任一时刻四个象限都有颜色覆盖。
             // x 相位左右错开、y 相位上下错开 → 象限内游走、边缘交叠，重心不会挤到一侧。
-            blob(purple, 0.85f, 0.26f, 0.22f, 0.20f, 0.11f, 0.00f, 0.25f, 0.62f)
-            blob(pink,   0.85f, 0.74f, 0.30f, 0.20f, 0.11f, 0.50f, 0.75f, 0.60f)
-            blob(purple, 0.80f, 0.70f, 0.78f, 0.20f, 0.11f, 0.50f, 0.25f, 0.64f)
-            blob(pink,   0.80f, 0.28f, 0.85f, 0.20f, 0.11f, 0.00f, 0.75f, 0.62f)
+            blob(aboutPurple, 0.85f, 0.26f, 0.22f, 0.20f, 0.11f, 0.00f, 0.25f, 0.62f)
+            blob(aboutPink,   0.85f, 0.74f, 0.30f, 0.20f, 0.11f, 0.50f, 0.75f, 0.60f)
+            blob(aboutPurple, 0.80f, 0.70f, 0.78f, 0.20f, 0.11f, 0.50f, 0.25f, 0.64f)
+            blob(aboutPink,   0.80f, 0.28f, 0.85f, 0.20f, 0.11f, 0.00f, 0.75f, 0.62f)
         }
     } else Modifier
 
@@ -577,17 +580,14 @@ internal fun SettingsTab(
                                 Modifier.fillMaxWidth(),
                                 horizontalAlignment = Alignment.CenterHorizontally
                             ) {
-                                // Logo 染色效果（KernelSU 同款「深色基底 + 渐变光泽」）：
-                                // 原矢量先灰度化（保留信封折线的亮度层次），再叠加一层主题
-                                // 动态色渐变（Multiply 正片叠底）→ 深色主体带彩色光泽，颜色
-                                // 完全跟随 MaterialTheme 动态取色（Monet），不写死色值。
-                                // offscreen 合成层保证 Multiply 不漏染到渐变背景，边缘清晰；
-                                // 整层 alpha 略降形成轻微半透明融合感。
-                                val logoBrush = Brush.linearGradient(
-                                    0f to MaterialTheme.colorScheme.primary,
-                                    0.55f to MaterialTheme.colorScheme.tertiary,
-                                    1f to MaterialTheme.colorScheme.secondary
-                                )
+                                // Logo 染色：半透明深黑主体 + 背景同源渐变映射。
+                                // 三层：①原矢量灰度化（保留信封折线亮度层次）②SrcAtop 压深
+                                // 成深黑半透明 ③SrcAtop 叠背景同源紫粉渐变（中间 stop 随
+                                // aboutPhase 流动）→ Logo 内部颜色与背景映射同步变化。
+                                // offscreen 合成层隔离混色，不漏染到背景；边缘保持清晰。
+                                val logoMix = (sin(2f * PI.toFloat() * aboutPhase) + 1f) / 2f
+                                val logoDeep = if (aboutDark) 0.35f else 0.50f
+                                val logoTint = if (aboutDark) 0.60f else 0.48f
                                 Box(
                                     Modifier
                                         .size(96.dp)
@@ -606,17 +606,44 @@ internal fun SettingsTab(
                                         modifier = Modifier.size(96.dp)
                                     )
                                     Canvas(Modifier.size(96.dp)) {
-                                        drawRect(brush = logoBrush, blendMode = BlendMode.Multiply)
+                                        // 压深：整体往深黑方向压（不纯黑，保留灰度层次）
+                                        drawRect(
+                                            Color.Black.copy(alpha = logoDeep),
+                                            blendMode = BlendMode.SrcAtop
+                                        )
+                                        // 背景映射：背景同源紫粉渐变染进 Logo 内部，随相位流动
+                                        drawRect(
+                                            brush = Brush.linearGradient(
+                                                colorStops = arrayOf(
+                                                    0f to aboutPurple.copy(alpha = logoTint),
+                                                    0.5f to lerp(aboutPurple, aboutPink, logoMix)
+                                                        .copy(alpha = logoTint * 0.75f),
+                                                    1f to aboutPink.copy(alpha = logoTint)
+                                                ),
+                                                start = Offset.Zero,
+                                                end = Offset(size.width, size.height)
+                                            ),
+                                            blendMode = BlendMode.SrcAtop
+                                        )
                                     }
                                 }
                                 Spacer(Modifier.height(16.dp))
-                                // 应用名用主题 primary 色，与图标/背景同色系融合（KernelSU 同款）
+                                // 软件名与 Logo 同款染色：深黑半透明为主、中段透出背景同源
+                                // 紫粉（随 aboutPhase 流动）→ 名字颜色与背景映射同步变化
+                                val nameDeep = if (aboutDark) 0.55f else 0.72f
+                                val nameBrush = Brush.linearGradient(
+                                    colorStops = arrayOf(
+                                        0f to Color.Black.copy(alpha = nameDeep),
+                                        0.45f to aboutPurple.copy(alpha = nameDeep * 0.85f),
+                                        0.55f to lerp(aboutPurple, aboutPink, logoMix)
+                                            .copy(alpha = nameDeep * 0.85f),
+                                        1f to Color.Black.copy(alpha = nameDeep)
+                                    )
+                                )
                                 Text(
                                     stringResource(R.string.app_name),
-                                    style = if (hyper) MiuixTheme.textStyles.title1
-                                            else MaterialTheme.typography.headlineLarge,
-                                    color = if (hyper) MiuixTheme.colorScheme.primary
-                                            else MaterialTheme.colorScheme.primary
+                                    style = if (hyper) MiuixTheme.textStyles.title1.copy(brush = nameBrush)
+                                            else MaterialTheme.typography.headlineLarge.copy(brush = nameBrush)
                                 )
                                 Spacer(Modifier.height(6.dp))
                                 Text(
