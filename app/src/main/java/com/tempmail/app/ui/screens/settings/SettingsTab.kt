@@ -579,14 +579,7 @@ internal fun SettingsTab(
                             ThemedIconButton(onClick = { page = SettingsPage.Main }) {
                                 Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = s.back)
                             }
-                            Spacer(Modifier.height(8.dp))
-                            // 大标题：KernelSU 同款特大号左对齐
-                            Text(
-                                s.about,
-                                style = if (hyper) MiuixTheme.textStyles.title1
-                                        else MaterialTheme.typography.displaySmall
-                            )
-                            Spacer(Modifier.height(56.dp))
+                            Spacer(Modifier.height(24.dp))
                             // 居中标识区：App 图标块 + 应用名 + 版本号
                             Column(
                                 Modifier.fillMaxWidth(),
