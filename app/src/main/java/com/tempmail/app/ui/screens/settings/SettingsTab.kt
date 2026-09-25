@@ -367,11 +367,6 @@ internal fun SettingsTab(
                                     }
                             ThemedDivider(modifier = Modifier.padding(horizontal = 16.dp))
                             SettingsItem(
-                                label = s.about,
-                                onClick = { page = SettingsPage.About }
-                            )
-                            ThemedDivider(modifier = Modifier.padding(horizontal = 16.dp))
-                            SettingsItem(
                                 label = s.checkUpdate,
                                 onClick = { onCheckUpdate(true) }
                             )
@@ -387,6 +382,11 @@ internal fun SettingsTab(
                                     onCheckedChange = { onState(state.copy(autoCheckUpdate = it)) }
                                 )
                             }
+                            ThemedDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                            SettingsItem(
+                                label = s.about,
+                                onClick = { page = SettingsPage.About }
+                            )
                                 }
                             }
                         }
