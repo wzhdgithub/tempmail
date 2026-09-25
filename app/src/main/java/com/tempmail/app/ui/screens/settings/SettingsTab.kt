@@ -9,8 +9,6 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.util.Log
-import android.content.Intent
-import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Message
@@ -53,7 +51,6 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
@@ -95,14 +92,12 @@ import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
@@ -147,7 +142,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import okhttp3.Call
 import kotlin.math.PI
-import kotlin.math.max
+import kotlin.math.min
 import kotlin.math.sin
 import kotlin.random.Random
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -232,7 +227,6 @@ internal fun SettingsTab(
 ) {
     // 子页状态由根布局持有（见 setContent 中的说明）：底栏布局分支切换时不会被重置
     var page by pageState
-    val ctx = LocalContext.current
     BackHandler(page != SettingsPage.Main) { page = SettingsPage.Main }
 
     // 关于页整页动态背景（KernelSU 同款配色）：数个大尺寸柔边色斑（径向渐变圆）
@@ -255,10 +249,10 @@ internal fun SettingsTab(
         Modifier.drawBehind {
             val w = size.width
             val h = size.height
-            val longSide = max(w, h)
+            val minDim = min(w, h)
             val tau = 2f * PI.toFloat()
             drawRect(base)
-            // 色斑参数：颜色、中心基点(比例)、漂移幅度(比例)、轨迹相位(x,y)、半径(长边比例)。
+            // 色斑参数：颜色、中心基点(比例)、漂移幅度(比例)、轨迹相位(x,y)、半径(短边比例)。
             // 中心 0.55 半径内保持主浓度、向外羽化到透明，斑与斑交叠处自然融合。
             fun blob(
                 color: Color, alpha: Float,
@@ -267,7 +261,7 @@ internal fun SettingsTab(
             ) {
                 val cx = w * (bx + ax * sin(tau * (phase + px)))
                 val cy = h * (by + ay * sin(tau * (phase + py)))
-                val radius = r * longSide
+                val radius = r * minDim
                 drawCircle(
                     brush = Brush.radialGradient(
                         colorStops = arrayOf(
@@ -282,10 +276,12 @@ internal fun SettingsTab(
                     center = Offset(cx, cy)
                 )
             }
-            // 幅度加大让穿插更明显：大斑横移 ±0.28 屏宽、纵移 ±0.22 屏高
-            blob(purple, 0.92f, 0.28f, 0.30f, 0.28f, 0.22f, 0.00f, 0.25f, 0.50f)
-            blob(pink,   0.92f, 0.72f, 0.60f, 0.28f, 0.22f, 0.50f, 0.75f, 0.52f)
-            blob(purple, 0.60f, 0.55f, 0.10f, 0.30f, 0.18f, 0.30f, 0.60f, 0.36f)
+            // 四斑对角对称分布（紫左上/右下，粉右上/左下），任一时刻四个象限都有颜色覆盖。
+            // x 相位左右错开、y 相位上下错开 → 象限内游走、边缘交叠，重心不会挤到一侧。
+            blob(purple, 0.85f, 0.26f, 0.22f, 0.20f, 0.11f, 0.00f, 0.25f, 0.62f)
+            blob(pink,   0.85f, 0.74f, 0.30f, 0.20f, 0.11f, 0.50f, 0.75f, 0.60f)
+            blob(purple, 0.80f, 0.70f, 0.78f, 0.20f, 0.11f, 0.50f, 0.25f, 0.64f)
+            blob(pink,   0.80f, 0.28f, 0.85f, 0.20f, 0.11f, 0.00f, 0.75f, 0.62f)
         }
     } else Modifier
 
@@ -391,11 +387,6 @@ internal fun SettingsTab(
                                     onCheckedChange = { onState(state.copy(autoCheckUpdate = it)) }
                                 )
                             }
-                            ThemedDivider(modifier = Modifier.padding(horizontal = 16.dp))
-                            SettingsItem(
-                                label = s.author,
-                                onClick = { page = SettingsPage.Author }
-                            )
                                 }
                             }
                         }
@@ -647,49 +638,6 @@ internal fun SettingsTab(
                             }
                         }
 
-                SettingsPage.Author -> {
-                    ThemedIconButton(onClick = { page = SettingsPage.Main }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = s.back)
-                    }
-                    Spacer(Modifier.height(8.dp))
-                    Text(s.author, style = MaterialTheme.typography.headlineSmall)
-                    Spacer(Modifier.height(20.dp))
-                    ThemedCard(Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.large) {
-                        Column(Modifier.padding(20.dp)) {
-                            Text("GitHub", style = MaterialTheme.typography.labelLarge)
-                            Spacer(Modifier.height(4.dp))
-                            Text(s.authorHomepage,
-                                style = MaterialTheme.typography.bodyMedium.copy(
-                                    textDecoration = TextDecoration.Underline,
-                                    color = MaterialTheme.colorScheme.primary
-                                ),
-                                modifier = Modifier.clickable {
-                                    ctx.startActivity(Intent(Intent.ACTION_VIEW,
-                                        Uri.parse("https://github.com/wzhdgithub")))
-                                })
-                            Spacer(Modifier.height(4.dp))
-                            Text(s.projectRepo,
-                                style = MaterialTheme.typography.bodyMedium.copy(
-                                    textDecoration = TextDecoration.Underline,
-                                    color = MaterialTheme.colorScheme.primary
-                                ),
-                                modifier = Modifier.clickable {
-                                    ctx.startActivity(Intent(Intent.ACTION_VIEW,
-                                        Uri.parse("https://github.com/wzhdgithub/tempmail")))
-                                })
-                            Spacer(Modifier.height(4.dp))
-                            Text("Blog",
-                                style = MaterialTheme.typography.bodyMedium.copy(
-                                    textDecoration = TextDecoration.Underline,
-                                    color = MaterialTheme.colorScheme.primary
-                                ),
-                                modifier = Modifier.clickable {
-                                    ctx.startActivity(Intent(Intent.ACTION_VIEW,
-                                        Uri.parse("https://wzhblog6.pwapi.cn/")))
-                                })
-                        }
-                    }
-                }
                     }
                     }
                 }
@@ -698,13 +646,6 @@ internal fun SettingsTab(
                 // 最后一项会被底栏遮住、点不到（与 InboxTab 曾经的错位相同）
                 if (bottomOverlap > 0.dp) Spacer(Modifier.height(bottomOverlap))
             }
-        }
-        if (page == SettingsPage.Main) {
-            Text("${s.version} ${BuildConfig.VERSION_NAME}",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.align(Alignment.CenterHorizontally)
-                    .padding(bottom = 8.dp + bottomOverlap))
         }
         }
     }
