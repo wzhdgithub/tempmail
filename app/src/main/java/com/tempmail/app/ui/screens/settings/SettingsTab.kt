@@ -145,8 +145,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import okhttp3.Call
-import kotlin.math.PI
-import kotlin.math.sin
 import kotlin.random.Random
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
@@ -166,6 +164,7 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.foundation.Image
 import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import com.tempmail.app.data.*
@@ -229,33 +228,32 @@ internal fun SettingsTab(
     val ctx = LocalContext.current
     BackHandler(page != SettingsPage.Main) { page = SettingsPage.Main }
 
-    // 关于页整页动态渐变（KernelSU 同款）：单循环驱动三个错相正弦波，
-    // 主色 / 容器色 / 第三容器色在顶-中-底三段交替涨落，形成可见的色带滚动；
-    // 颜色全部取自当前主题（莫奈取色下三色异相，呈现多色柔和流动）。
-    // 渐变挂在最外层 Box 上铺满全屏（含状态栏与底栏后面）；水平 24 边距在滚动
-    // Column 上，其余子页内容宽度与原实现一致，版本行仍居中不受影响。
+    // 关于页整页动态渐变（KernelSU 同款固定配色）：淡紫 → 白 → 淡粉的窄色带
+    // 沿屏幕连续滚动（相位循环，真"流动"而非原地明暗呼吸）。深色模式取同色相
+    // 暗色版本避免刺眼。渐变挂最外层 Box 铺满全屏（含状态栏/底栏后面）。
     val aboutGradient = if (page == SettingsPage.About) {
-        val hyper = LocalThemeStyle.current == ThemeStyle.HyperOS
-        val cPrimary = if (hyper) MiuixTheme.colorScheme.primary
-                       else MaterialTheme.colorScheme.primary
-        val cContainer = if (hyper) MiuixTheme.colorScheme.primaryContainer
-                         else MaterialTheme.colorScheme.primaryContainer
-        val cTertiary = if (hyper) MiuixTheme.colorScheme.tertiaryContainer
-                        else MaterialTheme.colorScheme.tertiaryContainer
-        val raw by rememberInfiniteTransition(label = "aboutGradient").animateFloat(
+        val dark = MaterialTheme.colorScheme.background.luminance() < 0.5f
+        val purple = if (dark) Color(0xFF2B2340) else Color(0xFFD9CDF6)
+        val pink = if (dark) Color(0xFF3A2433) else Color(0xFFF6D5E5)
+        val plain = if (dark) Color(0xFF1D1A24) else Color(0xFFF7F4FB)
+        val phase by rememberInfiniteTransition(label = "aboutGradient").animateFloat(
             initialValue = 0f,
             targetValue = 1f,
-            animationSpec = infiniteRepeatable(tween(8000, easing = LinearEasing)),
+            animationSpec = infiniteRepeatable(tween(12000, easing = LinearEasing)),
             label = "aboutGradientPhase"
         )
-        // 正弦波：raw 线性循环时 0→1→0 平滑往返（Restart 模式下无跳变）
-        fun wave(offset: Float): Float = sin((raw + offset) * 2.0 * PI).toFloat() * 0.5f + 0.5f
+        // 周期色带：紫(0) → 白(1/4) → 粉(1/2) → 白(3/4) → 紫(1)；采样点随相位循环 → 色带连续滚动且循环无缝
+        fun band(u: Float): Color = when {
+            u < 0.25f -> lerp(purple, plain, u * 4f)
+            u < 0.50f -> lerp(plain, pink, (u - 0.25f) * 4f)
+            u < 0.75f -> lerp(pink, plain, (u - 0.50f) * 4f)
+            else -> lerp(plain, purple, (u - 0.75f) * 4f)
+        }
         Brush.verticalGradient(
-            listOf(
-                lerp(cContainer, cPrimary, wave(0.00f)).copy(alpha = 0.55f),
-                lerp(cTertiary, cContainer, wave(0.33f)).copy(alpha = 0.45f),
-                lerp(cPrimary, cContainer, wave(0.66f)).copy(alpha = 0.55f)
-            )
+            colorStops = Array(7) { i ->
+                val stop = i / 6f
+                stop to band((stop + phase) % 1f)
+            }
         )
     } else null
 
