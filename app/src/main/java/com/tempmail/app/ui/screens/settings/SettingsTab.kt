@@ -83,8 +83,12 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.ColorMatrix
+import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.TransformOrigin
@@ -573,14 +577,38 @@ internal fun SettingsTab(
                                 Modifier.fillMaxWidth(),
                                 horizontalAlignment = Alignment.CenterHorizontally
                             ) {
-                                // 图标裸放（无底板），直接坐在渐变背景上；圆角裁剪成系统图标风格
-                                Image(
-                                    painter = painterResource(R.drawable.ic_launcher),
-                                    contentDescription = null,
-                                    modifier = Modifier
-                                        .size(96.dp)
-                                        .clip(RoundedCornerShape(22.dp))
+                                // Logo 染色效果（KernelSU 同款「深色基底 + 渐变光泽」）：
+                                // 原矢量先灰度化（保留信封折线的亮度层次），再叠加一层主题
+                                // 动态色渐变（Multiply 正片叠底）→ 深色主体带彩色光泽，颜色
+                                // 完全跟随 MaterialTheme 动态取色（Monet），不写死色值。
+                                // offscreen 合成层保证 Multiply 不漏染到渐变背景，边缘清晰；
+                                // 整层 alpha 略降形成轻微半透明融合感。
+                                val logoBrush = Brush.linearGradient(
+                                    0f to MaterialTheme.colorScheme.primary,
+                                    0.55f to MaterialTheme.colorScheme.tertiary,
+                                    1f to MaterialTheme.colorScheme.secondary
                                 )
+                                Box(
+                                    Modifier
+                                        .size(96.dp)
+                                        .graphicsLayer {
+                                            compositingStrategy = CompositingStrategy.Offscreen
+                                            alpha = 0.95f
+                                        }
+                                        .clip(RoundedCornerShape(22.dp))
+                                ) {
+                                    Image(
+                                        painter = painterResource(R.drawable.ic_launcher),
+                                        contentDescription = null,
+                                        colorFilter = ColorFilter.colorMatrix(
+                                            ColorMatrix().apply { setToSaturation(0f) }
+                                        ),
+                                        modifier = Modifier.size(96.dp)
+                                    )
+                                    Canvas(Modifier.size(96.dp)) {
+                                        drawRect(brush = logoBrush, blendMode = BlendMode.Multiply)
+                                    }
+                                }
                                 Spacer(Modifier.height(16.dp))
                                 // 应用名用主题 primary 色，与图标/背景同色系融合（KernelSU 同款）
                                 Text(
