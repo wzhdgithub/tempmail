@@ -158,7 +158,12 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
 import java.util.concurrent.TimeUnit
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.foundation.Image
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import com.tempmail.app.data.*
@@ -222,28 +227,44 @@ internal fun SettingsTab(
     val ctx = LocalContext.current
     BackHandler(page != SettingsPage.Main) { page = SettingsPage.Main }
 
-    // 关于页整页渐变（KernelSU 同款）：顶部容器色 → 背景 → 底部淡容器色。
-    // 渐变挂在 weight Box 上铺满视口；水平 24 边距从外层下移到滚动 Column，
-    // 其余子页内容宽度与原实现完全一致，版本行仍居中不受影响。
+    // 关于页整页动态渐变（KernelSU 同款）：主容器色与第三容器色缓慢互换流动，
+    // 颜色全部取自当前主题（莫奈取色下呈现多色柔和过渡）。渐变挂在最外层 Box
+    // 上铺满全屏——含状态栏与底栏后面，不再出现上下露底色；水平 24 边距在滚动
+    // Column 上，其余子页内容宽度与原实现一致，版本行仍居中不受影响。
     val aboutGradient = if (page == SettingsPage.About) {
-        val c = themedSurfaceColors()
+        val hyper = LocalThemeStyle.current == ThemeStyle.HyperOS
+        val cPrimary = if (hyper) MiuixTheme.colorScheme.primaryContainer
+                       else MaterialTheme.colorScheme.primaryContainer
+        val cTertiary = if (hyper) MiuixTheme.colorScheme.tertiaryContainer
+                        else MaterialTheme.colorScheme.tertiaryContainer
+        val cBackground = if (hyper) MiuixTheme.colorScheme.background
+                          else MaterialTheme.colorScheme.background
+        val phase by rememberInfiniteTransition(label = "aboutGradient").animateFloat(
+            initialValue = 0f,
+            targetValue = 1f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(10000, easing = LinearEasing),
+                repeatMode = RepeatMode.Reverse
+            ),
+            label = "aboutGradientPhase"
+        )
         Brush.verticalGradient(
             listOf(
-                c.primaryContainer.copy(alpha = 0.45f),
-                c.background,
-                c.primaryContainer.copy(alpha = 0.28f)
+                lerp(cPrimary, cTertiary, phase).copy(alpha = 0.50f),
+                cBackground,
+                lerp(cTertiary, cPrimary, phase).copy(alpha = 0.50f)
             )
         )
     } else null
 
-    Column(Modifier.fillMaxSize().padding(p).statusBarsPadding()) {
-        Box(
-            Modifier.weight(1f).then(
-                if (aboutGradient != null) Modifier.background(aboutGradient) else Modifier
-            ),
-            propagateMinConstraints = true
-        ) {
-            Column(Modifier.verticalScroll(rememberScrollState()).padding(horizontal = 24.dp)) {
+    Box(
+        Modifier.fillMaxSize().then(
+            if (aboutGradient != null) Modifier.background(aboutGradient) else Modifier
+        )
+    ) {
+        Column(Modifier.fillMaxSize().padding(p).statusBarsPadding()) {
+            Box(Modifier.weight(1f), propagateMinConstraints = true) {
+                Column(Modifier.verticalScroll(rememberScrollState()).padding(horizontal = 24.dp)) {
                 Spacer(Modifier.height(24.dp))
 
                 AnimatedContent(
@@ -623,6 +644,7 @@ internal fun SettingsTab(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.align(Alignment.CenterHorizontally)
                     .padding(bottom = 8.dp + bottomOverlap))
+        }
         }
     }
 }
