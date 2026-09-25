@@ -573,24 +573,22 @@ internal fun SettingsTab(
                                 Modifier.fillMaxWidth(),
                                 horizontalAlignment = Alignment.CenterHorizontally
                             ) {
-                                Box(
-                                    Modifier
+                                // 图标裸放（无底板），直接坐在渐变背景上；圆角裁剪成系统图标风格
+                                Image(
+                                    painter = painterResource(R.drawable.ic_launcher),
+                                    contentDescription = null,
+                                    modifier = Modifier
                                         .size(96.dp)
-                                        .clip(RoundedCornerShape(28.dp))
-                                        .background(surfaceColors.card),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Image(
-                                        painter = painterResource(R.drawable.ic_launcher),
-                                        contentDescription = null,
-                                        modifier = Modifier.size(56.dp)
-                                    )
-                                }
-                                Spacer(Modifier.height(20.dp))
+                                        .clip(RoundedCornerShape(22.dp))
+                                )
+                                Spacer(Modifier.height(16.dp))
+                                // 应用名用主题 primary 色，与图标/背景同色系融合（KernelSU 同款）
                                 Text(
                                     stringResource(R.string.app_name),
-                                    style = if (hyper) MiuixTheme.textStyles.title2
-                                            else MaterialTheme.typography.headlineMedium
+                                    style = if (hyper) MiuixTheme.textStyles.title1
+                                            else MaterialTheme.typography.headlineLarge,
+                                    color = if (hyper) MiuixTheme.colorScheme.primary
+                                            else MaterialTheme.colorScheme.primary
                                 )
                                 Spacer(Modifier.height(6.dp))
                                 Text(
