@@ -81,6 +81,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
@@ -94,7 +95,6 @@ import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.LocalView
@@ -147,8 +147,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import okhttp3.Call
 import kotlin.math.PI
-import kotlin.math.cos
-import kotlin.math.hypot
+import kotlin.math.max
 import kotlin.math.sin
 import kotlin.random.Random
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -168,7 +167,6 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.foundation.Image
-import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -233,45 +231,55 @@ internal fun SettingsTab(
     val ctx = LocalContext.current
     BackHandler(page != SettingsPage.Main) { page = SettingsPage.Main }
 
-    // 关于页整页动态渐变（KernelSU 同款固定配色）：淡紫 → 白 → 淡粉的柔和色带
-    // 沿斜向连续滚动（相位循环、无缝，流动方向与水平线约 35° 夹角）。
-    // 深色模式取同色相暗版避免刺眼。渐变挂最外层 Box 铺满全屏（含状态栏/底栏后面）。
+    // 关于页整页动态背景（KernelSU 同款固定配色）：数个大尺寸柔边色斑（径向渐变圆）
+    // 沿各自的椭圆轨迹独立漂移、相互穿插融合 → 不规则色块的"多色流动"观感。
+    // 全部轨迹用 sin(2π(t+φ))，8s 一轮无缝循环；深色模式取同色相暗版避免刺眼。
+    // 背景挂最外层 Box 铺满全屏（含状态栏/底栏后面）。纯 drawBehind，无 Blur/RenderEffect。
     val aboutBackground: Modifier = if (page == SettingsPage.About) {
         val dark = MaterialTheme.colorScheme.background.luminance() < 0.5f
-        val purple = if (dark) Color(0xFF2B2340) else Color(0xFFD9CDF6)
-        val pink = if (dark) Color(0xFF3A2433) else Color(0xFFF6D5E5)
-        val plain = if (dark) Color(0xFF1D1A24) else Color(0xFFF7F4FB)
+        val base = if (dark) Color(0xFF1D1A24) else Color(0xFFF7F4FB)
+        val purple = if (dark) Color(0xFF3A3156) else Color(0xFFD9CDF6)
+        val pink = if (dark) Color(0xFF452B3B) else Color(0xFFF6D5E5)
         val phase by rememberInfiniteTransition(label = "aboutGradient").animateFloat(
             initialValue = 0f,
             targetValue = 1f,
             animationSpec = infiniteRepeatable(tween(8000, easing = LinearEasing)),
             label = "aboutGradientPhase"
         )
-        // 周期色带：紫(0) → 白(1/4) → 粉(1/2) → 白(3/4) → 紫(1)。
-        // 13 个采样点（每段 ≥3 个）保证线性插值重建出的波形平滑，不会出现条纹。
-        fun band(u: Float): Color = when {
-            u < 0.25f -> lerp(purple, plain, u * 4f)
-            u < 0.50f -> lerp(plain, pink, (u - 0.25f) * 4f)
-            u < 0.75f -> lerp(pink, plain, (u - 0.50f) * 4f)
-            else -> lerp(plain, purple, (u - 0.75f) * 4f)
+        Modifier.drawBehind {
+            val w = size.width
+            val h = size.height
+            val longSide = max(w, h)
+            val tau = 2f * PI.toFloat()
+            drawRect(base)
+            // 色斑参数：颜色、中心基点(比例)、漂移幅度(比例)、轨迹相位(x,y)、半径(长边比例)。
+            // 中心 0.55 半径内保持主浓度、向外羽化到透明，斑与斑交叠处自然融合。
+            fun blob(
+                color: Color, alpha: Float,
+                bx: Float, by: Float, ax: Float, ay: Float,
+                px: Float, py: Float, r: Float
+            ) {
+                val cx = w * (bx + ax * sin(tau * (phase + px)))
+                val cy = h * (by + ay * sin(tau * (phase + py)))
+                val radius = r * longSide
+                drawCircle(
+                    brush = Brush.radialGradient(
+                        colorStops = arrayOf(
+                            0f to color.copy(alpha = alpha),
+                            0.55f to color.copy(alpha = alpha * 0.7f),
+                            1f to Color.Transparent
+                        ),
+                        center = Offset(cx, cy),
+                        radius = radius
+                    ),
+                    radius = radius,
+                    center = Offset(cx, cy)
+                )
+            }
+            blob(purple, 0.90f, 0.28f, 0.30f, 0.20f, 0.16f, 0.00f, 0.25f, 0.50f)
+            blob(pink,   0.90f, 0.72f, 0.60f, 0.20f, 0.16f, 0.50f, 0.75f, 0.52f)
+            blob(purple, 0.55f, 0.55f, 0.10f, 0.22f, 0.12f, 0.30f, 0.60f, 0.36f)
         }
-        // 斜向渐变：方向向量与水平线约 35°（偏横向，太陡会看不出斜），
-        // 线段过屏幕中心、长度取对角线 1.1 倍，任何屏幕比例下都能覆盖全屏（越界部分自动 clamp）。
-        val screenW = LocalConfiguration.current.screenWidthDp.toFloat()
-        val screenH = LocalConfiguration.current.screenHeightDp.toFloat()
-        val angle = 35f / 180f * PI.toFloat()
-        val dir = Offset(cos(angle), sin(angle))
-        val diag = hypot(screenW, screenH) * 1.1f
-        val center = Offset(screenW / 2f, screenH / 2f)
-        val gradient = Brush.linearGradient(
-            colorStops = Array(13) { i ->
-                val stop = i / 12f
-                stop to band((stop + phase) % 1f)
-            },
-            start = center - dir * (diag / 2f),
-            end = center + dir * (diag / 2f)
-        )
-        Modifier.background(gradient)
     } else Modifier
 
     Box(Modifier.fillMaxSize().then(aboutBackground)) {
