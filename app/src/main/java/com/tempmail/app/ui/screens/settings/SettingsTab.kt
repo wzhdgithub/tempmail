@@ -240,15 +240,21 @@ internal fun SettingsTab(
     // 背景独立成层并注册为 layerBackdrop，供链接卡片 drawBackdrop 做毛玻璃。
     // 纯 drawBehind，无 BlurMaskFilter/RenderEffect。
     val aboutBackdrop = rememberLayerBackdrop()
-    // 关于页动态色源：背景色斑与 Logo/软件名染色共用同一组颜色和相位，
+    // 关于页动态色源：背景色斑与 Logo/软件名染色共用同一组相位，
     // Logo/名字内部的颜色就是背景同源色、随同一节奏流动 → 真实的"背景映射"。
+    // 色系：雾紫 / 雾粉 / 雾蓝（KernelSU 蓝色版同款观感）；5s 一轮。
     val aboutDark = MaterialTheme.colorScheme.background.luminance() < 0.5f
     val aboutPurple = if (aboutDark) Color(0xFF4A3D6E) else Color(0xFFC7B0F2)
     val aboutPink = if (aboutDark) Color(0xFF57344C) else Color(0xFFF3BCD9)
+    val aboutBlue = if (aboutDark) Color(0xFF2E3D5C) else Color(0xFFC3D6F2)
+    // 映射色（Logo/名字染色）：浅色模式 = 背景色加深提饱和；深色模式 = 轻微提亮
+    val mapPurple = if (aboutDark) Color(0xFF6A57A0) else Color(0xFF9F7FE8)
+    val mapPink = if (aboutDark) Color(0xFF7E4A6B) else Color(0xFFE890BE)
+    val mapBlue = if (aboutDark) Color(0xFF485F8F) else Color(0xFF7E9BD8)
     val aboutPhase by rememberInfiniteTransition(label = "aboutGradient").animateFloat(
         initialValue = 0f,
         targetValue = 1f,
-        animationSpec = infiniteRepeatable(tween(7000, easing = LinearEasing)),
+        animationSpec = infiniteRepeatable(tween(5000, easing = LinearEasing)),
         label = "aboutGradientPhase"
     )
     val aboutBackground: Modifier = if (page == SettingsPage.About) {
@@ -283,12 +289,14 @@ internal fun SettingsTab(
                     center = Offset(cx, cy)
                 )
             }
-            // 四斑对角对称分布（紫左上/右下，粉右上/左下），任一时刻四个象限都有颜色覆盖。
+            // 六斑三色对称分布（紫 左上/右下、粉 右上/左下、蓝 左中/右中），
             // x 相位左右错开、y 相位上下错开 → 象限内游走、边缘交叠，重心不会挤到一侧。
             blob(aboutPurple, 0.85f, 0.26f, 0.22f, 0.20f, 0.11f, 0.00f, 0.25f, 0.62f)
             blob(aboutPink,   0.85f, 0.74f, 0.30f, 0.20f, 0.11f, 0.50f, 0.75f, 0.60f)
-            blob(aboutPurple, 0.80f, 0.70f, 0.78f, 0.20f, 0.11f, 0.50f, 0.25f, 0.64f)
+            blob(aboutBlue,   0.80f, 0.14f, 0.55f, 0.20f, 0.11f, 0.25f, 0.50f, 0.58f)
+            blob(aboutBlue,   0.80f, 0.86f, 0.52f, 0.20f, 0.11f, 0.75f, 0.00f, 0.58f)
             blob(aboutPink,   0.80f, 0.28f, 0.85f, 0.20f, 0.11f, 0.00f, 0.75f, 0.62f)
+            blob(aboutPurple, 0.80f, 0.70f, 0.78f, 0.20f, 0.11f, 0.50f, 0.25f, 0.64f)
         }
     } else Modifier
 
@@ -584,10 +592,6 @@ internal fun SettingsTab(
                                 // 灰度底保留信封折线层次，SrcAtop 把加深后的背景色染进
                                 // Logo 内部；offscreen 合成层隔离混色，边缘清晰、轻微半透明。
                                 val logoMix = (sin(2f * PI.toFloat() * aboutPhase) + 1f) / 2f
-                                // 映射色 = 背景同源色向黑收一段（加深）；深色模式少收避免看不清
-                                val darken = if (aboutDark) 0.15f else 0.40f
-                                val tintPurple = lerp(aboutPurple, Color.Black, darken)
-                                val tintPink = lerp(aboutPink, Color.Black, darken)
                                 val tintAlpha = if (aboutDark) 0.75f else 0.85f
                                 Box(
                                     Modifier
@@ -612,10 +616,10 @@ internal fun SettingsTab(
                                         drawRect(
                                             brush = Brush.linearGradient(
                                                 colorStops = arrayOf(
-                                                    0f to tintPurple.copy(alpha = tintAlpha),
-                                                    0.5f to lerp(tintPurple, tintPink, logoMix)
+                                                    0f to mapPurple.copy(alpha = tintAlpha),
+                                                    0.5f to lerp(mapBlue, mapPink, logoMix)
                                                         .copy(alpha = tintAlpha * 0.85f),
-                                                    1f to tintPink.copy(alpha = tintAlpha)
+                                                    1f to mapPink.copy(alpha = tintAlpha)
                                                 ),
                                                 start = Offset.Zero,
                                                 end = Offset(size.width, size.height)
@@ -628,9 +632,9 @@ internal fun SettingsTab(
                                 // 软件名与 Logo 同款：加深的背景同源紫粉渐变，中段随相位流动
                                 val nameBrush = Brush.linearGradient(
                                     colorStops = arrayOf(
-                                        0f to tintPurple.copy(alpha = 0.92f),
-                                        0.5f to lerp(tintPurple, tintPink, logoMix).copy(alpha = 0.88f),
-                                        1f to tintPink.copy(alpha = 0.92f)
+                                        0f to mapPurple.copy(alpha = 0.92f),
+                                        0.5f to lerp(mapBlue, mapPink, logoMix).copy(alpha = 0.88f),
+                                        1f to mapPink.copy(alpha = 0.92f)
                                     )
                                 )
                                 Text(
