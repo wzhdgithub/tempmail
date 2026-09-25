@@ -580,14 +580,15 @@ internal fun SettingsTab(
                                 Modifier.fillMaxWidth(),
                                 horizontalAlignment = Alignment.CenterHorizontally
                             ) {
-                                // Logo 染色：半透明深黑主体 + 背景同源渐变映射。
-                                // 三层：①原矢量灰度化（保留信封折线亮度层次）②SrcAtop 压深
-                                // 成深黑半透明 ③SrcAtop 叠背景同源紫粉渐变（中间 stop 随
-                                // aboutPhase 流动）→ Logo 内部颜色与背景映射同步变化。
-                                // offscreen 合成层隔离混色，不漏染到背景；边缘保持清晰。
+                                // Logo 染色：背景同源紫粉映射（加深版），随相位流动。
+                                // 灰度底保留信封折线层次，SrcAtop 把加深后的背景色染进
+                                // Logo 内部；offscreen 合成层隔离混色，边缘清晰、轻微半透明。
                                 val logoMix = (sin(2f * PI.toFloat() * aboutPhase) + 1f) / 2f
-                                val logoDeep = if (aboutDark) 0.35f else 0.50f
-                                val logoTint = if (aboutDark) 0.60f else 0.48f
+                                // 映射色 = 背景同源色向黑收一段（加深）；深色模式少收避免看不清
+                                val darken = if (aboutDark) 0.15f else 0.40f
+                                val tintPurple = lerp(aboutPurple, Color.Black, darken)
+                                val tintPink = lerp(aboutPink, Color.Black, darken)
+                                val tintAlpha = if (aboutDark) 0.75f else 0.85f
                                 Box(
                                     Modifier
                                         .size(96.dp)
@@ -606,19 +607,15 @@ internal fun SettingsTab(
                                         modifier = Modifier.size(96.dp)
                                     )
                                     Canvas(Modifier.size(96.dp)) {
-                                        // 压深：整体往深黑方向压（不纯黑，保留灰度层次）
-                                        drawRect(
-                                            Color.Black.copy(alpha = logoDeep),
-                                            blendMode = BlendMode.SrcAtop
-                                        )
-                                        // 背景映射：背景同源紫粉渐变染进 Logo 内部，随相位流动
+                                        // 背景映射：加深后的背景同源紫粉渐变染进 Logo 内部，
+                                        // 中段随 aboutPhase 在紫粉间流动（与背景同步）
                                         drawRect(
                                             brush = Brush.linearGradient(
                                                 colorStops = arrayOf(
-                                                    0f to aboutPurple.copy(alpha = logoTint),
-                                                    0.5f to lerp(aboutPurple, aboutPink, logoMix)
-                                                        .copy(alpha = logoTint * 0.75f),
-                                                    1f to aboutPink.copy(alpha = logoTint)
+                                                    0f to tintPurple.copy(alpha = tintAlpha),
+                                                    0.5f to lerp(tintPurple, tintPink, logoMix)
+                                                        .copy(alpha = tintAlpha * 0.85f),
+                                                    1f to tintPink.copy(alpha = tintAlpha)
                                                 ),
                                                 start = Offset.Zero,
                                                 end = Offset(size.width, size.height)
@@ -628,16 +625,12 @@ internal fun SettingsTab(
                                     }
                                 }
                                 Spacer(Modifier.height(16.dp))
-                                // 软件名与 Logo 同款染色：深黑半透明为主、中段透出背景同源
-                                // 紫粉（随 aboutPhase 流动）→ 名字颜色与背景映射同步变化
-                                val nameDeep = if (aboutDark) 0.55f else 0.72f
+                                // 软件名与 Logo 同款：加深的背景同源紫粉渐变，中段随相位流动
                                 val nameBrush = Brush.linearGradient(
                                     colorStops = arrayOf(
-                                        0f to Color.Black.copy(alpha = nameDeep),
-                                        0.45f to aboutPurple.copy(alpha = nameDeep * 0.85f),
-                                        0.55f to lerp(aboutPurple, aboutPink, logoMix)
-                                            .copy(alpha = nameDeep * 0.85f),
-                                        1f to Color.Black.copy(alpha = nameDeep)
+                                        0f to tintPurple.copy(alpha = 0.92f),
+                                        0.5f to lerp(tintPurple, tintPink, logoMix).copy(alpha = 0.88f),
+                                        1f to tintPink.copy(alpha = 0.92f)
                                     )
                                 )
                                 Text(
