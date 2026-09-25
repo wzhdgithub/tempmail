@@ -249,7 +249,7 @@ internal fun SettingsTab(
                                     ThemedDivider(modifier = Modifier.padding(horizontal = 16.dp))
                                     SettingsItem(
                                         label = s.mailService,
-                                        value = if (state.mailProvider == MailProvider.InstantTempEmail) "instanttempemail.com" else "PearAPI",
+                                        value = if (state.mailProvider == MailProvider.InstantTempEmail) "接口2" else "接口1",
                                         onClick = { page = SettingsPage.MailProvider }
                                     )
                                     // 明暗模式与底栏选项：HyperOS 主题下合并进「主题设置」，
@@ -394,7 +394,7 @@ internal fun SettingsTab(
                                             Box(Modifier.size(8.dp).background(dotColor, CircleShape))
                                             Spacer(Modifier.width(10.dp))
                                             Text(
-                                                if (p == MailProvider.InstantTempEmail) "instanttempemail.com" else "PearAPI",
+                                                if (p == MailProvider.InstantTempEmail) "接口2" else "接口1",
                                                 style = MaterialTheme.typography.bodyMedium
                                             )
                                             Spacer(Modifier.weight(1f))
@@ -413,7 +413,7 @@ internal fun SettingsTab(
                                     MailProvider.entries.forEachIndexed { i, p ->
                                         if (i > 0) ThemedDivider(modifier = Modifier.padding(horizontal = 16.dp))
                                         LanguageOption(
-                                            if (p == MailProvider.InstantTempEmail) "instanttempemail.com" else "PearAPI",
+                                            if (p == MailProvider.InstantTempEmail) "接口2" else "接口1",
                                             state.mailProvider == p,
                                             onClick = { onState(state.copy(mailProvider = p)); page = SettingsPage.Main }
                                         )
