@@ -176,6 +176,10 @@ import com.tempmail.app.R
 import com.tempmail.app.i18n.*
 import com.tempmail.app.model.*
 import com.tempmail.app.ui.theme.LocalThemeStyle
+import top.yukonga.miuix.kmp.blur.blur
+import top.yukonga.miuix.kmp.blur.drawBackdrop
+import top.yukonga.miuix.kmp.blur.layerBackdrop
+import top.yukonga.miuix.kmp.blur.rememberLayerBackdrop
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 /** 明暗三态的显示文案（设置主页的值、深色模式子页、主题设置页的分段控件共用）。 */
 internal fun themeModeLabel(mode: ThemeMode, s: Strings): String = when (mode) {
@@ -231,19 +235,21 @@ internal fun SettingsTab(
     val ctx = LocalContext.current
     BackHandler(page != SettingsPage.Main) { page = SettingsPage.Main }
 
-    // 关于页整页动态背景（KernelSU 同款固定配色）：数个大尺寸柔边色斑（径向渐变圆）
+    // 关于页整页动态背景（KernelSU 同款配色）：数个大尺寸柔边色斑（径向渐变圆）
     // 沿各自的椭圆轨迹独立漂移、相互穿插融合 → 不规则色块的"多色流动"观感。
-    // 全部轨迹用 sin(2π(t+φ))，8s 一轮无缝循环；深色模式取同色相暗版避免刺眼。
-    // 背景挂最外层 Box 铺满全屏（含状态栏/底栏后面）。纯 drawBehind，无 Blur/RenderEffect。
+    // 全部轨迹用 sin(2π(t+φ))，7s 一轮无缝循环；深色模式取同色相暗版避免刺眼。
+    // 背景独立成层并注册为 layerBackdrop，供链接卡片 drawBackdrop 做毛玻璃。
+    // 纯 drawBehind，无 BlurMaskFilter/RenderEffect。
+    val aboutBackdrop = rememberLayerBackdrop()
     val aboutBackground: Modifier = if (page == SettingsPage.About) {
         val dark = MaterialTheme.colorScheme.background.luminance() < 0.5f
         val base = if (dark) Color(0xFF1D1A24) else Color(0xFFF7F4FB)
-        val purple = if (dark) Color(0xFF3A3156) else Color(0xFFD9CDF6)
-        val pink = if (dark) Color(0xFF452B3B) else Color(0xFFF6D5E5)
+        val purple = if (dark) Color(0xFF4A3D6E) else Color(0xFFC7B0F2)
+        val pink = if (dark) Color(0xFF57344C) else Color(0xFFF3BCD9)
         val phase by rememberInfiniteTransition(label = "aboutGradient").animateFloat(
             initialValue = 0f,
             targetValue = 1f,
-            animationSpec = infiniteRepeatable(tween(8000, easing = LinearEasing)),
+            animationSpec = infiniteRepeatable(tween(7000, easing = LinearEasing)),
             label = "aboutGradientPhase"
         )
         Modifier.drawBehind {
@@ -276,13 +282,23 @@ internal fun SettingsTab(
                     center = Offset(cx, cy)
                 )
             }
-            blob(purple, 0.90f, 0.28f, 0.30f, 0.20f, 0.16f, 0.00f, 0.25f, 0.50f)
-            blob(pink,   0.90f, 0.72f, 0.60f, 0.20f, 0.16f, 0.50f, 0.75f, 0.52f)
-            blob(purple, 0.55f, 0.55f, 0.10f, 0.22f, 0.12f, 0.30f, 0.60f, 0.36f)
+            // 幅度加大让穿插更明显：大斑横移 ±0.28 屏宽、纵移 ±0.22 屏高
+            blob(purple, 0.92f, 0.28f, 0.30f, 0.28f, 0.22f, 0.00f, 0.25f, 0.50f)
+            blob(pink,   0.92f, 0.72f, 0.60f, 0.28f, 0.22f, 0.50f, 0.75f, 0.52f)
+            blob(purple, 0.60f, 0.55f, 0.10f, 0.30f, 0.18f, 0.30f, 0.60f, 0.36f)
         }
     } else Modifier
 
-    Box(Modifier.fillMaxSize().then(aboutBackground)) {
+    Box(Modifier.fillMaxSize()) {
+        // 背景独立子层：layerBackdrop 只捕获纯渐变（不含前景内容），
+        // 链接卡片 drawBackdrop 取它做毛玻璃，避免卡片把自身模糊进背景形成反馈。
+        // 非 About 页 aboutBackground 为空 Modifier，此层无视觉影响。
+        Box(
+            Modifier
+                .matchParentSize()
+                .layerBackdrop(aboutBackdrop)
+                .then(aboutBackground)
+        )
         Column(Modifier.fillMaxSize().padding(p).statusBarsPadding()) {
             Box(Modifier.weight(1f), propagateMinConstraints = true) {
                 Column(Modifier.verticalScroll(rememberScrollState()).padding(horizontal = 24.dp)) {
@@ -595,14 +611,31 @@ internal fun SettingsTab(
                                 )
                             }
                             Spacer(Modifier.height(56.dp))
-                            // 链接行组：半透明卡片（KernelSU 同款微微透明观感），
-                            // 透出背后的动态渐变，卡片色随背景流动轻微变化；
+                            // 链接行组：半透明卡片透出动态背景；HyperOS + API33+ 走真毛玻璃
+                            // （drawBackdrop 模糊背后的渐变层），否则退化为纯半透明色。
                             // HyperOS 行仍渲染为 Miuix BasicComponent（MIUI 排版 + 按压反馈）
+                            val cardShape = MaterialTheme.shapes.large
                             Box(
                                 Modifier
                                     .fillMaxWidth()
-                                    .clip(MaterialTheme.shapes.large)
-                                    .background(surfaceColors.card.copy(alpha = 0.72f))
+                                    .clip(cardShape)
+                                    .then(
+                                        if (hyper && isGlassBlurSupported()) {
+                                            Modifier.drawBackdrop(
+                                                backdrop = aboutBackdrop,
+                                                shape = { cardShape },
+                                                effects = {
+                                                    padding = maxOf(padding, 40.dp.toPx())
+                                                    blur(14.dp.toPx(), 14.dp.toPx())
+                                                },
+                                                onDrawSurface = {
+                                                    drawRect(surfaceColors.card.copy(alpha = 0.45f))
+                                                }
+                                            )
+                                        } else {
+                                            Modifier.background(surfaceColors.card.copy(alpha = 0.45f))
+                                        }
+                                    )
                             ) {
                                 Column {
                                     AboutLinkRow(s.projectRepo, "https://github.com/wzhdgithub/tempmail")
