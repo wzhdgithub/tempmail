@@ -242,7 +242,7 @@ internal fun SettingsTab(
     val aboutBackdrop = rememberLayerBackdrop()
     // 关于页动态色源：背景色斑与 Logo/软件名染色共用同一组相位，
     // Logo/名字内部的颜色就是背景同源色、随同一节奏流动 → 真实的"背景映射"。
-    // 色系：雾紫 / 雾粉 / 雾蓝（KernelSU 蓝色版同款观感）；5s 一轮。
+    // 色系：雾紫 / 雾粉 / 雾蓝（KernelSU 蓝色版同款观感）；7s 一轮。
     val aboutDark = MaterialTheme.colorScheme.background.luminance() < 0.5f
     val aboutPurple = if (aboutDark) Color(0xFF4A3D6E) else Color(0xFFC7B0F2)
     val aboutPink = if (aboutDark) Color(0xFF57344C) else Color(0xFFF3BCD9)
@@ -258,7 +258,7 @@ internal fun SettingsTab(
     val aboutPhase by rememberInfiniteTransition(label = "aboutGradient").animateFloat(
         initialValue = 0f,
         targetValue = 1f,
-        animationSpec = infiniteRepeatable(tween(5000, easing = LinearEasing)),
+        animationSpec = infiniteRepeatable(tween(7000, easing = LinearEasing)),
         label = "aboutGradientPhase"
     )
     val aboutBackground: Modifier = if (page == SettingsPage.About) {
