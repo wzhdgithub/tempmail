@@ -161,6 +161,9 @@ import java.util.concurrent.TimeUnit
 import com.tempmail.app.data.*
 import com.tempmail.app.i18n.*
 import com.tempmail.app.model.*
+import com.tempmail.app.ui.theme.LocalThemeStyle
+import top.yukonga.miuix.kmp.theme.MiuixTheme
+
 @Composable
 internal fun SettingsItem(label: String, value: String? = null, onClick: () -> Unit) {
     Row(
@@ -197,4 +200,29 @@ internal fun LanguageOption(label: String, selected: Boolean, onClick: () -> Uni
                 color = MaterialTheme.colorScheme.primary)
         }
     }
+}
+
+/**
+ * 「关于」页链接行（KernelSU 同款布局）：整行可点打开浏览器，尾部右箭头。
+ * HyperOS 走 Miuix BasicComponent（MIUI 行排版与按压缩放反馈，箭头取动作图标色），
+ * Material3 走手写行；观感各自融入主题。
+ */
+@Composable
+internal fun AboutLinkRow(title: String, url: String) {
+    val ctx = LocalContext.current
+    val hyper = LocalThemeStyle.current == ThemeStyle.HyperOS
+    val chevronTint = if (hyper) MiuixTheme.colorScheme.onSurfaceVariantActions
+                      else MaterialTheme.colorScheme.onSurfaceVariant
+    ThemedListRow(
+        title = title,
+        onClick = {
+            try {
+                ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+            } catch (_: Exception) { }
+        },
+        trailing = {
+            Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                contentDescription = null, tint = chevronTint)
+        }
+    )
 }

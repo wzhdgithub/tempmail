@@ -158,10 +158,16 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
 import java.util.concurrent.TimeUnit
+import androidx.compose.foundation.Image
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import com.tempmail.app.data.*
 import com.tempmail.app.BuildConfig
+import com.tempmail.app.R
 import com.tempmail.app.i18n.*
 import com.tempmail.app.model.*
+import com.tempmail.app.ui.theme.LocalThemeStyle
+import top.yukonga.miuix.kmp.theme.MiuixTheme
 /** 明暗三态的显示文案（设置主页的值、深色模式子页、主题设置页的分段控件共用）。 */
 internal fun themeModeLabel(mode: ThemeMode, s: Strings): String = when (mode) {
     ThemeMode.System -> s.themeFollowSystem
@@ -216,9 +222,28 @@ internal fun SettingsTab(
     val ctx = LocalContext.current
     BackHandler(page != SettingsPage.Main) { page = SettingsPage.Main }
 
-    Column(Modifier.fillMaxSize().padding(p).padding(horizontal = 24.dp).statusBarsPadding()) {
-        Box(Modifier.weight(1f), propagateMinConstraints = true) {
-            Column(Modifier.verticalScroll(rememberScrollState())) {
+    // 关于页整页渐变（KernelSU 同款）：顶部容器色 → 背景 → 底部淡容器色。
+    // 渐变挂在 weight Box 上铺满视口；水平 24 边距从外层下移到滚动 Column，
+    // 其余子页内容宽度与原实现完全一致，版本行仍居中不受影响。
+    val aboutGradient = if (page == SettingsPage.About) {
+        val c = themedSurfaceColors()
+        Brush.verticalGradient(
+            listOf(
+                c.primaryContainer.copy(alpha = 0.45f),
+                c.background,
+                c.primaryContainer.copy(alpha = 0.28f)
+            )
+        )
+    } else null
+
+    Column(Modifier.fillMaxSize().padding(p).statusBarsPadding()) {
+        Box(
+            Modifier.weight(1f).then(
+                if (aboutGradient != null) Modifier.background(aboutGradient) else Modifier
+            ),
+            propagateMinConstraints = true
+        ) {
+            Column(Modifier.verticalScroll(rememberScrollState()).padding(horizontal = 24.dp)) {
                 Spacer(Modifier.height(24.dp))
 
                 AnimatedContent(
@@ -481,15 +506,61 @@ internal fun SettingsTab(
                         )
 
                         SettingsPage.About -> {
+                            val hyper = LocalThemeStyle.current == ThemeStyle.HyperOS
+                            val surfaceColors = themedSurfaceColors()
                             ThemedIconButton(onClick = { page = SettingsPage.Main }) {
                                 Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = s.back)
                             }
                             Spacer(Modifier.height(8.dp))
-                            Text(s.about, style = MaterialTheme.typography.headlineSmall)
-                            Spacer(Modifier.height(20.dp))
+                            // 大标题：KernelSU 同款特大号左对齐
+                            Text(
+                                s.about,
+                                style = if (hyper) MiuixTheme.textStyles.title1
+                                        else MaterialTheme.typography.displaySmall
+                            )
+                            Spacer(Modifier.height(56.dp))
+                            // 居中标识区：App 图标块 + 应用名 + 版本号
+                            Column(
+                                Modifier.fillMaxWidth(),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Box(
+                                    Modifier
+                                        .size(96.dp)
+                                        .clip(RoundedCornerShape(28.dp))
+                                        .background(surfaceColors.card),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Image(
+                                        painter = painterResource(R.drawable.ic_launcher),
+                                        contentDescription = null,
+                                        modifier = Modifier.size(56.dp)
+                                    )
+                                }
+                                Spacer(Modifier.height(20.dp))
+                                Text(
+                                    stringResource(R.string.app_name),
+                                    style = if (hyper) MiuixTheme.textStyles.title2
+                                            else MaterialTheme.typography.headlineMedium
+                                )
+                                Spacer(Modifier.height(6.dp))
+                                Text(
+                                    "v" + BuildConfig.VERSION_NAME,
+                                    style = if (hyper) MiuixTheme.textStyles.body2
+                                            else MaterialTheme.typography.bodyMedium,
+                                    color = if (hyper) MiuixTheme.colorScheme.onSurfaceSecondary
+                                            else MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            Spacer(Modifier.height(56.dp))
+                            // 链接行组：HyperOS 渲染为 Miuix BasicComponent（MIUI 行排版 + 按压反馈）
                             ThemedCard(Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.large) {
-                                Column(Modifier.padding(20.dp)) {
-                                    Text(s.aboutDesc, style = MaterialTheme.typography.bodyMedium)
+                                Column {
+                                    AboutLinkRow(s.projectRepo, "https://github.com/wzhdgithub/tempmail")
+                                    ThemedDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                                    AboutLinkRow(s.authorHomepage, "https://github.com/wzhdgithub")
+                                    ThemedDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                                    AboutLinkRow("Blog", "https://wzhblog6.pwapi.cn/")
                                 }
                             }
                         }
