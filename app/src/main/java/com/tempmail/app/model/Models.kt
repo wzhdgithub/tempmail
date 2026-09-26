@@ -107,7 +107,10 @@ data class AppState(
     // 当前邮箱过期时刻（epoch 毫秒，0=未知，不显示倒计时）。
     // ITE 由服务端 expires 提供（每次轮询回填校准）；PearAPI 接口只给时长"10 minutes"，
     // 故取生成时刻+10 分钟估算，与实际行为一致
-    val mailboxExpiresAt: Long = 0L
+    val mailboxExpiresAt: Long = 0L,
+    // 预测性返回（实验性，默认关闭）：开启后设置子页的返回手势跟随动画（PredictiveBackHandler）；
+    // 关闭时保持原有 BackHandler 一次性回调行为。仅应用内层级，退出应用时的系统动画不受它控制
+    val predictiveBack: Boolean = false
 )
 
 /** 明暗三态读取：优先新键 themeMode，旧版本只有布尔 isDarkMode，做一次性兼容读取。 */
@@ -141,6 +144,7 @@ internal fun appStateToJson(state: AppState): String {
     j.put("mailProvider", state.mailProvider.key)
     j.put("iteToken", state.iteToken)
     j.put("mailboxExpiresAt", state.mailboxExpiresAt)
+    j.put("predictiveBack", state.predictiveBack)
     // items 限制条数、正文截断、且不保存 htmlBody（完整 HTML 动辄数十 KB），
     // 防止写入 Bundle 越过 Binder 事务上限导致 TransactionTooLargeException
     val items = JSONArray()
@@ -219,7 +223,8 @@ internal fun appStateFromJson(json: String): AppState? {
             dynamicContrast = j.optDouble("dynamicContrast", 0.0).toFloat(),
             mailProvider = MailProvider.fromKey(j.optString("mailProvider", MailProvider.PearApi.key)),
             iteToken = j.optString("iteToken", ""),
-            mailboxExpiresAt = j.optLong("mailboxExpiresAt", 0L)
+            mailboxExpiresAt = j.optLong("mailboxExpiresAt", 0L),
+            predictiveBack = j.optBoolean("predictiveBack", false)
         )
     } catch (e: Exception) {
         null

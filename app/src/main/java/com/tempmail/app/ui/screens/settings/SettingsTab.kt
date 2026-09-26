@@ -24,6 +24,7 @@ import androidx.core.content.FileProvider
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.PredictiveBackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -161,6 +162,7 @@ import java.security.MessageDigest
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
+import java.util.concurrent.CancellationException
 import java.util.concurrent.TimeUnit
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -232,7 +234,43 @@ internal fun SettingsTab(
 ) {
     // 子页状态由根布局持有（见 setContent 中的说明）：底栏布局分支切换时不会被重置
     var page by pageState
-    BackHandler(page != SettingsPage.Main) { page = SettingsPage.Main }
+
+    // 返回拦截：双 handler 按「主题设置-实验性-预测性返回」开关互斥（官方规范：无条件调用，
+    // 用 enabled 控制，避免条件组合改变 handler 注册顺序）。
+    // 开关关闭 = 原 BackHandler 行为（一次性回调，与历史版本完全一致）；
+    // 开关开启 = PredictiveBackHandler（Android 13+ 手势期间回调 progress 流，驱动跟随动画）。
+    // 返回边界与原实现一致：仅"子页 → 设置主页"；设置主页按返回仍是退出应用（不新增层级）。
+    BackHandler(enabled = !state.predictiveBack && page != SettingsPage.Main) {
+        page = SettingsPage.Main
+    }
+
+    // —— 预测性返回观感参数（可自调）——
+    // pbSlide ：子页跟随手势向右平移幅度，0f~1f（1f = 全宽滑出）
+    // pbScale ：子页缩小幅度，0f = 不缩放
+    // pbFade  ：子页淡出幅度，0f = 不淡出
+    // pbPivotX：缩放的视觉重心（0.5f 居中，越接近 1f 越靠右，贴近系统返回观感）
+    val pbSlide = 0.30f
+    val pbScale = 0.06f
+    val pbFade = 0.25f
+    val pbPivotX = 0.88f
+    // progress 用 Animatable 持有：跟手阶段 snapTo 逐帧跟随；取消时 animateTo 弹回 0。
+    // 它是瞬时 UI 状态（remember，非持久化），返回层级真源始终是 page（根布局的
+    // settingsPageState），不引入新的返回状态源。
+    val pbProgress = remember { Animatable(0f) }
+    PredictiveBackHandler(enabled = state.predictiveBack && page != SettingsPage.Main) { progress ->
+        try {
+            progress.collect { pbProgress.snapTo(it.progress) }
+            // 手势确认：切回设置主页（AnimatedContent 的滑动过渡接管收尾），进度立即归零
+            page = SettingsPage.Main
+            pbProgress.snapTo(0f)
+        } catch (e: CancellationException) {
+            // 手势取消：回弹恢复当前子页（页面从未切换，无需还原状态）
+            pbProgress.animateTo(
+                0f,
+                spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMediumLow)
+            )
+        }
+    }
 
     // 关于页整页动态背景（KernelSU 同款配色）：数个大尺寸柔边色斑（径向渐变圆）
     // 沿各自的椭圆轨迹独立漂移、相互穿插融合 → 不规则色块的"多色流动"观感。
@@ -321,6 +359,17 @@ internal fun SettingsTab(
 
                 AnimatedContent(
                     targetState = page,
+                    // 预测性返回：progress 在 draw 阶段读取（不触发重组），驱动子页整体
+                    // 右移/缩小/淡出；page=Main 时进度恒为 0，此处无视觉影响
+                    modifier = Modifier.graphicsLayer {
+                        val p = pbProgress.value
+                        translationX = size.width * pbSlide * p
+                        val sc = 1f - pbScale * p
+                        scaleX = sc
+                        scaleY = sc
+                        alpha = 1f - pbFade * p
+                        transformOrigin = TransformOrigin(pbPivotX, 0.5f)
+                    },
                     transitionSpec = {
                         val forward = targetState.ordinal > initialState.ordinal
                         val direction = if (forward) 1 else -1

@@ -91,7 +91,10 @@ dependencies {
 
     implementation("androidx.core:core-ktx:1.12.0")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.7.0")
-    implementation("androidx.activity:activity-compose:1.8.2")
+    // activity-compose 1.10.1：提供 PredictiveBackHandler（1.9.0 起加入），
+    // 供「主题设置 → 实验性 → 预测性返回」使用。要求 compileSdk 35+（当前 37 满足）；
+    // 传递依赖会把 lifecycle 抬到 2.8.7+，与 compose 1.11.2 链路一致，无冲突。
+    implementation("androidx.activity:activity-compose:1.10.1")
 
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
 

@@ -188,7 +188,8 @@ internal fun TempMailApp(activity: ComponentActivity) {
                 dynamicSeed = prefs.getInt("dynamicSeed", NoDynamicSeed),
                 dynamicStyle = DynamicStyle.fromKey(prefs.getString("dynamicStyle", DynamicStyle.TonalSpot.key)),
                 dynamicContrast = prefs.getFloat("dynamicContrast", 0f),
-                mailProvider = MailProvider.fromKey(prefs.getString("mailProvider", MailProvider.PearApi.key))
+                mailProvider = MailProvider.fromKey(prefs.getString("mailProvider", MailProvider.PearApi.key)),
+                predictiveBack = prefs.getBoolean("predictiveBack", false)
             ))
         }
         val snackbar = remember { SnackbarHostState() }
@@ -681,6 +682,9 @@ internal fun TempMailApp(activity: ComponentActivity) {
                             }
                             if (newState.mailProvider != state.mailProvider) {
                                 prefs.edit().putString("mailProvider", newState.mailProvider.key).apply()
+                            }
+                            if (newState.predictiveBack != state.predictiveBack) {
+                                prefs.edit().putBoolean("predictiveBack", newState.predictiveBack).apply()
                             }
                             state = newState
                         }

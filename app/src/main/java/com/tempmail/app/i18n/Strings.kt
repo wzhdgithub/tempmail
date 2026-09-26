@@ -93,7 +93,11 @@ internal data class Strings(
     val announcement: String = "Announcement",
     val announcementView: String = "View details",
     // "不再提醒"：记录当前公告 version 后永久忽略；新公告（version 更大）仍正常展示
-    val announceMute: String = "Don't show again"
+    val announceMute: String = "Don't show again",
+    // 主题设置-实验性（预测性返回开关）。15 种语言均已翻译，默认值作为未知语言的英文兜底
+    val experimental: String = "Experimental",
+    val predictiveBack: String = "Predictive back",
+    val predictiveBackDesc: String = "Animate the back gesture when leaving subpages"
 )
 
 internal fun strings(lang: String): Strings = when (lang) {
@@ -169,7 +173,9 @@ internal fun strings(lang: String): Strings = when (lang) {
         autoRefresh = "自動更新",
         announcement = "お知らせ",
         announcementView = "詳細を見る",
-        announceMute = "今後表示しない"
+        announceMute = "今後表示しない",
+        experimental = "実験的機能", predictiveBack = "予測バック",
+        predictiveBackDesc = "サブページから戻る際に戻るジェスチャーをアニメーション表示"
     )
     "ko" -> Strings(
         title = "임시 메일",
@@ -216,7 +222,9 @@ internal fun strings(lang: String): Strings = when (lang) {
         autoRefresh = "자동 새로고침",
         announcement = "공지",
         announcementView = "자세히 보기",
-        announceMute = "다시 보지 않기"
+        announceMute = "다시 보지 않기",
+        experimental = "실험적 기능", predictiveBack = "예측 뒤로 가기",
+        predictiveBackDesc = "하위 페이지에서 뒤로 가기 제스처에 애니메이션을 표시합니다"
     )
     "fr" -> Strings(
         title = "Temp Mail",
@@ -263,7 +271,9 @@ internal fun strings(lang: String): Strings = when (lang) {
         autoRefresh = "Actualisation auto",
         announcement = "Annonce",
         announcementView = "Voir les détails",
-        announceMute = "Ne plus afficher"
+        announceMute = "Ne plus afficher",
+        experimental = "Expérimental", predictiveBack = "Retour prédictif",
+        predictiveBackDesc = "Anime le geste de retour en quittant les sous-pages"
     )
     "de" -> Strings(
         title = "Temp Mail",
@@ -310,7 +320,9 @@ internal fun strings(lang: String): Strings = when (lang) {
         autoRefresh = "Auto-Aktualisierung",
         announcement = "Ankündigung",
         announcementView = "Details ansehen",
-        announceMute = "Nicht mehr anzeigen"
+        announceMute = "Nicht mehr anzeigen",
+        experimental = "Experimentell", predictiveBack = "Vorhersagendes Zurück",
+        predictiveBackDesc = "Animiert die Zurück-Geste beim Verlassen von Unterseiten"
     )
     "es" -> Strings(
         title = "Correo Temporal",
@@ -357,7 +369,9 @@ internal fun strings(lang: String): Strings = when (lang) {
         autoRefresh = "Actualización automática",
         announcement = "Anuncio",
         announcementView = "Ver detalles",
-        announceMute = "No mostrar más"
+        announceMute = "No mostrar más",
+        experimental = "Experimental", predictiveBack = "Volver predictivo",
+        predictiveBackDesc = "Anima el gesto de retroceso al salir de las subpáginas"
     )
     "pt" -> Strings(
         title = "Email Temporário",
@@ -404,7 +418,9 @@ internal fun strings(lang: String): Strings = when (lang) {
         autoRefresh = "Atualização automática",
         announcement = "Anúncio",
         announcementView = "Ver detalhes",
-        announceMute = "Não mostrar mais"
+        announceMute = "Não mostrar mais",
+        experimental = "Experimental", predictiveBack = "Voltar preditivo",
+        predictiveBackDesc = "Anima o gesto de voltar ao sair das subpáginas"
     )
     "ru" -> Strings(
         title = "Временная почта",
@@ -451,7 +467,9 @@ internal fun strings(lang: String): Strings = when (lang) {
         autoRefresh = "Автообновление",
         announcement = "Объявление",
         announcementView = "Подробнее",
-        announceMute = "Больше не показывать"
+        announceMute = "Больше не показывать",
+        experimental = "Экспериментально", predictiveBack = "Прогнозируемый возврат",
+        predictiveBackDesc = "Анимация жеста возврата при уходе с вложенных страниц"
     )
     "it" -> Strings(
         title = "Email Temporanea",
@@ -498,7 +516,9 @@ internal fun strings(lang: String): Strings = when (lang) {
         autoRefresh = "Aggiornamento automatico",
         announcement = "Annuncio",
         announcementView = "Vedi dettagli",
-        announceMute = "Non mostrare più"
+        announceMute = "Non mostrare più",
+        experimental = "Sperimentale", predictiveBack = "Indietro predittivo",
+        predictiveBackDesc = "Anima il gesto di ritorno abbandonando le sottopagine"
     )
     "ar" -> Strings(
         title = "بريد مؤقت",
@@ -545,7 +565,9 @@ internal fun strings(lang: String): Strings = when (lang) {
         autoRefresh = "تحديث تلقائي",
         announcement = "إعلان",
         announcementView = "عرض التفاصيل",
-        announceMute = "لا تعرض مجددًا"
+        announceMute = "لا تعرض مجددًا",
+        experimental = "تجريبي", predictiveBack = "رجوع تنبؤي",
+        predictiveBackDesc = "يحرك إيماءة الرجوع عند مغادرة الصفحات الفرعية"
     )
     "hi" -> Strings(
         title = "अस्थायी मेल",
@@ -592,7 +614,9 @@ internal fun strings(lang: String): Strings = when (lang) {
         autoRefresh = "ऑटो रिफ्रेश",
         announcement = "घोषणा",
         announcementView = "विवरण देखें",
-        announceMute = "दोबारा न दिखाएँ"
+        announceMute = "दोबारा न दिखाएँ",
+        experimental = "प्रयोगात्मक", predictiveBack = "पूर्वानुमानित बैक",
+        predictiveBackDesc = "सबपेज छोड़ते समय बैक जेस्चर का एनिमेशन दिखाता है"
     )
     "vi" -> Strings(
         title = "Mail Tạm Thời",
@@ -639,7 +663,9 @@ internal fun strings(lang: String): Strings = when (lang) {
         autoRefresh = "Tự động làm mới",
         announcement = "Thông báo",
         announcementView = "Xem chi tiết",
-        announceMute = "Không hiện lại"
+        announceMute = "Không hiện lại",
+        experimental = "Thử nghiệm", predictiveBack = "Quay lại dự đoán",
+        predictiveBackDesc = "Tạo hiệu ứng cho cử chỉ quay lại khi rời trang con"
     )
     "th" -> Strings(
         title = "อีเมลชั่วคราว",
@@ -686,7 +712,9 @@ internal fun strings(lang: String): Strings = when (lang) {
         autoRefresh = "รีเฟรชอัตโนมัติ",
         announcement = "ประกาศ",
         announcementView = "ดูรายละเอียด",
-        announceMute = "ไม่ต้องแสดงอีก"
+        announceMute = "ไม่ต้องแสดงอีก",
+        experimental = "ทดลอง", predictiveBack = "ย้อนกลับแบบคาดเดา",
+        predictiveBackDesc = "แสดงภาพเคลื่อนไหวเมื่อใช้ท่าทางย้อนกลับจากหน้าย่อย"
     )
     "id" -> Strings(
         title = "Email Sementara",
@@ -733,7 +761,9 @@ internal fun strings(lang: String): Strings = when (lang) {
         autoRefresh = "Refresh otomatis",
         announcement = "Pengumuman",
         announcementView = "Lihat detail",
-        announceMute = "Jangan tampilkan lagi"
+        announceMute = "Jangan tampilkan lagi",
+        experimental = "Eksperimental", predictiveBack = "Kembali prediktif",
+        predictiveBackDesc = "Animasikan gestur kembali saat meninggalkan subhalaman"
     )
     else -> Strings(
         title = "临时邮箱",
@@ -780,7 +810,9 @@ internal fun strings(lang: String): Strings = when (lang) {
         autoRefresh = "自动刷新",
         announcement = "公告",
         announcementView = "查看详情",
-        announceMute = "不再提醒"
+        announceMute = "不再提醒",
+        experimental = "实验性", predictiveBack = "预测性返回",
+        predictiveBackDesc = "返回手势离开子页时展示跟随动画"
     )
 }
 

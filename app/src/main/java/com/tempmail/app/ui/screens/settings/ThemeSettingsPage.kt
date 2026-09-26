@@ -318,6 +318,29 @@ internal fun ThemeSettingsPage(
             )
         }
     }
+    Spacer(Modifier.height(16.dp))
+
+    // 实验性：前瞻性功能集合。开关实时生效并持久化（走 onState → AppState 统一链路，
+    // 与页内其他开关一致；由 SettingsTab.onState 的 diff 写回 prefs）
+    Text(
+        s.experimental,
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(start = 20.dp)
+    )
+    Spacer(Modifier.height(8.dp))
+    ThemedCard(Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.large) {
+        ThemedListRow(
+            title = s.predictiveBack,
+            summary = s.predictiveBackDesc,
+            trailing = {
+                ThemedSwitch(
+                    checked = state.predictiveBack,
+                    onCheckedChange = { onState(state.copy(predictiveBack = it)) }
+                )
+            }
+        )
+    }
     Spacer(Modifier.height(24.dp))
 }
 
