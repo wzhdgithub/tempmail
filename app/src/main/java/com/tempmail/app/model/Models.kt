@@ -116,7 +116,7 @@ internal fun readThemeMode(prefs: android.content.SharedPreferences): ThemeMode 
     return if (prefs.getBoolean("isDarkMode", false)) ThemeMode.Dark else ThemeMode.Light
 }
 
-internal enum class SettingsPage { Main, Language, DarkMode, Theme, Monet, ThemeSettings, About, Author, MailProvider }
+internal enum class SettingsPage { Main, Language, DarkMode, Theme, Monet, ThemeSettings, About, MailProvider }
 
 /** 用序号持久化子页（配置变更 / 进程重建后回到原页面，越界时回退设置主页）。 */
 internal val SettingsPageSaver: Saver<SettingsPage, Int> = Saver(
