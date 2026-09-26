@@ -244,12 +244,12 @@ internal fun SettingsTab(
         page = SettingsPage.Main
     }
 
-    // —— 预测性返回观感参数——
+    // —— 预测性返回观感参数（可自调）——
     // pbSlide ：子页跟随手势向右平移幅度，0f~1f（1f = 全宽滑出）
     // pbScale ：子页缩小幅度，0f = 不缩放
     // pbFade  ：子页淡出幅度，0f = 不淡出
     // pbPivotX：缩放的视觉重心（0.5f 居中，越接近 1f 越靠右，贴近系统返回观感）
-    val pbSlide = 0.70f
+    val pbSlide = 0.30f
     val pbScale = 0.06f
     val pbFade = 0.25f
     val pbPivotX = 0.88f
@@ -260,33 +260,15 @@ internal fun SettingsTab(
     PredictiveBackHandler(enabled = state.predictiveBack && page != SettingsPage.Main) { progress ->
         try {
             progress.collect { pbProgress.snapTo(it.progress) }
-            // 手势确认：直接切回设置主页，不再把进度归零——
-            // pbProgress 停留在松手值，让过渡中滑出的子页带着当前偏移/透明度
-            // 继续执行 AnimatedContent 的向右滑出，与手势位置无缝衔接。
-            // 若此刻归零，子页会瞬间跳回原位再滑出（观感即"先往左回弹一下"）。
-            // 归零由下方 LaunchedEffect 在过渡结束后完成。
+            // 手势确认：切回设置主页（AnimatedContent 的滑动过渡接管收尾），进度立即归零
             page = SettingsPage.Main
+            pbProgress.snapTo(0f)
         } catch (e: CancellationException) {
             // 手势取消：回弹恢复当前子页（页面从未切换，无需还原状态）
             pbProgress.animateTo(
                 0f,
                 spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMediumLow)
             )
-        }
-    }
-
-    // 预测性返回提交后的进度归零：延迟到 AnimatedContent 过渡（250ms）结束后，
-    // 期间残留进度只作用于屏幕外正在滑出的子页（layer 仅挂子页分支，见 content 内
-    // pageLayer），对主页无可见影响。else 分支兜底：320ms 窗口内极快手速点进子页时
-    // 立即归零，避免新页带着旧偏移出现。
-    LaunchedEffect(page) {
-        if (page == SettingsPage.Main) {
-            if (pbProgress.value > 0f) {
-                delay(320)
-                pbProgress.snapTo(0f)
-            }
-        } else if (pbProgress.value > 0f) {
-            pbProgress.snapTo(0f)
         }
     }
 
@@ -377,10 +359,17 @@ internal fun SettingsTab(
 
                 AnimatedContent(
                     targetState = page,
-                    // 预测性返回的 progress 动画不放在容器层：layer 若挂在此处，
-                    // 切页时新旧两页共用同一变换，提交后归零会让 out 的旧子页
-                    // 瞬间复位（先左跳回原位再滑出）。改为在 content 内仅对
-                    // 子页分支挂 layer（见下方 pageLayer）。
+                    // 预测性返回：progress 在 draw 阶段读取（不触发重组），驱动子页整体
+                    // 右移/缩小/淡出；page=Main 时进度恒为 0，此处无视觉影响
+                    modifier = Modifier.graphicsLayer {
+                        val p = pbProgress.value
+                        translationX = size.width * pbSlide * p
+                        val sc = 1f - pbScale * p
+                        scaleX = sc
+                        scaleY = sc
+                        alpha = 1f - pbFade * p
+                        transformOrigin = TransformOrigin(pbPivotX, 0.5f)
+                    },
                     transitionSpec = {
                         val forward = targetState.ordinal > initialState.ordinal
                         val direction = if (forward) 1 else -1
@@ -391,22 +380,7 @@ internal fun SettingsTab(
                 ) { currentPage ->
                     // AnimatedContent 的内容作用域不会垂直堆叠同级元素：包一层 Column，
                     // 否则页面内"返回按钮 + 标题 + 卡片"会互相覆盖（标题与返回按钮被卡片盖住）
-                    // 预测性返回 layer 只挂子页分支：过渡中 out 的子页保持松手时的
-                    // 偏移/透明度继续向右滑出（与手势无缝衔接、无左弹跳变），
-                    // in 的主页不带 layer，不受残留进度影响
-                    val pageLayer = if (currentPage != SettingsPage.Main) {
-                        Modifier.graphicsLayer {
-                            val p = pbProgress.value
-                            translationX = size.width * pbSlide * p
-                            val sc = 1f - pbScale * p
-                            scaleX = sc
-                            scaleY = sc
-                            alpha = 1f - pbFade * p
-                            transformOrigin = TransformOrigin(pbPivotX, 0.5f)
-                        }
-                    } else Modifier
                     Column {
-                    Box(pageLayer) {
                     when (currentPage) {
                         SettingsPage.Main -> {
                             Text(s.settings, style = MaterialTheme.typography.headlineSmall)
@@ -760,7 +734,6 @@ internal fun SettingsTab(
                             }
                         }
 
-                    }
                     }
                     }
                 }
