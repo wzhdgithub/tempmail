@@ -249,7 +249,7 @@ internal fun SettingsTab(
     // pbScale ：子页缩小幅度，0f = 不缩放
     // pbFade  ：子页淡出幅度，0f = 不淡出
     // pbPivotX：缩放的视觉重心（0.5f 居中，越接近 1f 越靠右，贴近系统返回观感）
-    val pbSlide = 0.30f
+    val pbSlide = 0.70f
     val pbScale = 0.06f
     val pbFade = 0.25f
     val pbPivotX = 0.88f
